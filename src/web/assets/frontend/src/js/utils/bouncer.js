@@ -763,6 +763,9 @@ export const Bouncer = function(selector, options) {
         // Check for errors
         var isValid = getErrors(field, _settings);
 
+        console.log(field)
+        console.log(isValid)
+
         // If valid, remove any error messages
         if (isValid.valid) {
             removeError(field, _settings);

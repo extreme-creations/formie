@@ -25,54 +25,32 @@ export class FormieFormBase {
 
         // Hijack the form's submit handler, in case we need to do something
         this.addEventListener(this.$form, 'submit', (e) => {
-            console.log('submit');
-
             e.preventDefault();
-
-            console.log('beforeSubmitEvent');
 
             const beforeSubmitEvent = this.eventObject('onBeforeFormieSubmit', {
                 submitHandler: this,
             });
             
-            console.log('beforeSubmitEventAfter');
-
             if (!this.$form.dispatchEvent(beforeSubmitEvent)) {
-                console.log('failSubmitEventAfter');
-
                 return;
             }
             
-            console.log('beforeSubmitEventAfterDispatch');
-
             // Add a little delay for UX
             setTimeout(() => {
-                console.log('beforeValidate');
-
                 // Call the validation hooks
                 if (!this.validate() || !this.afterValidate()) {
-                    console.log('validateFail');
-
                     return;
                 }
-                
-                console.log('beforeFormieCaptchaValidate');
                 
                 // Create an event for before validation. This is mostly for captchas
                 const captchaValidateEvent = this.eventObject('onFormieCaptchaValidate', {
                     submitHandler: this,
                 });
                 
-                console.log('afterFormieCaptchaValidate');
-
                 if (!this.$form.dispatchEvent(captchaValidateEvent)) {
-                    console.log('failFormieCaptchaValidate');
-
                     return;
                 }
                 
-                console.log('afterFormieCaptchaValidateDispatch');
-
                 // Proceed with submitting the form, which raises other validation events
                 this.submitForm();
             }, 300);
@@ -98,8 +76,6 @@ export class FormieFormBase {
     }
 
     submitForm() {
-        console.log('submitForm');
-
         // Check if we're going back, and attach an input to tell formie not to validate
         if (this.$form.goBack) {
             const $backButtonInput = document.createElement('input');
@@ -109,21 +85,13 @@ export class FormieFormBase {
             this.$form.appendChild($backButtonInput);
         }
 
-        console.log('submitFormBefore');
-
         const submitEvent = this.eventObject('onFormieSubmit', {
             submitHandler: this,
         });
 
-        console.log('submitFormAfter');
-
         if (!this.$form.dispatchEvent(submitEvent)) {
-            console.log('submitFormFail');
-
             return;
         }
-
-        console.log('submitFormAfterDispatch');
 
         if (this.settings.submitMethod === 'ajax') {
             this.formAfterSubmit();

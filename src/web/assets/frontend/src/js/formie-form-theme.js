@@ -178,16 +178,10 @@ export class FormieFormTheme {
     }
 
     onValidate(e) {
-        console.log('onValidate');
-        console.log('goBack: ' + this.$form.goBack);
-        console.log('this.validate(): ' + this.validate());
-
         // Bypass validation and custom event handling if going back
         if (!this.$form.goBack && !this.validate()) {
             this.onFormError();
             
-            console.log('onValidateFail');
-
             // Set a flag on the event, so other listeners can potentially do something
             e.detail.invalid = true;
 
@@ -296,9 +290,14 @@ export class FormieFormTheme {
 
         var $fieldset = this.$form;
 
+        console.log($fieldset);
+        console.log(this.$currentPage);
+
         if (this.$currentPage) {
             $fieldset = this.$currentPage;
         }
+
+        console.log($fieldset);
 
         var invalidFields = this.validator.validateAll($fieldset);
         console.log('invalidFields: ' + invalidFields.length);
