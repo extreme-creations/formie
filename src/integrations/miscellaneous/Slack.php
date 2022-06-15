@@ -167,7 +167,7 @@ class Slack extends Miscellaneous
                 'query' => [
                     'exclude_archived' => true,
                     'exclude_members' => true,
-                    'limit' => 50,
+                    'limit' => 1000,
                 ],
             ]);
 
