@@ -26,10 +26,10 @@ abstract class EmailMarketing extends Integration implements IntegrationInterfac
     public $optInField;
     public $fieldMapping;
 
-    
+
     // Static Methods
     // =========================================================================
-    
+
     /**
      * @inheritDoc
      */
@@ -37,7 +37,7 @@ abstract class EmailMarketing extends Integration implements IntegrationInterfac
     {
         return Craft::t('formie', 'Email Marketing');
     }
-    
+
 
     // Public Methods
     // =========================================================================
@@ -58,14 +58,6 @@ abstract class EmailMarketing extends Integration implements IntegrationInterfac
     public function getSettingsHtml(): string
     {
         $handle = StringHelper::toKebabCase($this->displayName());
-
-        // Don't display anything if we can't edit anything
-        if (!Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
-            $text = Craft::t('formie', 'Integration settings can only be editable on an environment with `allowAdminChanges` enabled.');
-            $text = Markdown::processParagraph($text);
-
-            return Html::tag('span', $text, ['class' => 'warning with-icon']);
-        }
 
         return Craft::$app->getView()->renderTemplate("formie/integrations/email-marketing/{$handle}/_plugin-settings", [
             'integration' => $this,
@@ -105,9 +97,11 @@ abstract class EmailMarketing extends Integration implements IntegrationInterfac
 
         $fields = $this->_getListSettings()->fields ?? [];
 
-        $rules[] = [['fieldMapping'], 'validateFieldMapping', 'params' => $fields, 'when' => function($model) {
-            return $model->enabled;
-        }, 'on' => [Integration::SCENARIO_FORM]];
+        $rules[] = [
+            ['fieldMapping'], 'validateFieldMapping', 'params' => $fields, 'when' => function($model) {
+                return $model->enabled;
+            }, 'on' => [Integration::SCENARIO_FORM],
+        ];
 
         return $rules;
     }

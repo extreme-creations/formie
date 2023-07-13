@@ -1,5 +1,335 @@
 # Changelog
 
+## 1.6.29 - 2023-07-11
+
+### Added
+- Added support for Multi-Line Text fields retaining their HTML when mapped to text fields in Craft for Element integrations.
+- Added support for Single-Line Text fields retaining their HTML when mapped to text fields in Craft for Element integrations.
+
+### Fixed
+- Fixed Element integrations mapping to Multi-Line text fields with single quotes being encoded.
+- Fixed a type error with Solspace Calendar integration.
+
+## 1.6.28 - 2023-06-25
+
+### Fixed
+- Fixed Deal Stages options not being populates for Active Campaign integration.
+
+## 1.6.27 - 2023-05-27
+
+### Added
+- Added `craft`, `currentSite`, `currentUser` and `siteUrl` to available dynamic variables
+
+### Changed
+- Ensure events are still triggered if the integration is creating a Draft. (thanks @taylordaughtry).
+- Element integrations now factor in fetching existing elements of any status.
+
+### Fixed
+- Fixed ActiveCampaign Email Marketing integration not using pagination for tags. (thanks @jimirobaer).
+
+## 1.6.26 - 2023-03-25
+
+### Added
+- Added Microsoft Dynamics 365 Web API version to be configurable via settings. (thanks @jamesmacwhite).
+
+### Fixed
+- Fixed an issue deleting assets when a form contained multiple File Upload fields.
+- Fixed an error when querying a Dropdown with optgroup settings for GraphQL.
+- Fixed checking the validity of a token use the WhoAmI endpoint for Microsoft Dynamics 365. (thanks @jamesmacwhite).
+- Fixed for #1324 undefined array key for Microsoft Dynamics 365. (thanks @jamesmacwhite).
+- Fixed lack of error handling for Google Sheets when no OAuth token.
+
+## 1.6.25 - 2023-02-28
+
+### Added
+- Added pagination support for ActiveCampaign integration fields.
+
+### Changed
+- Changed Microsoft Dynamics 365 `convertFieldType()` function as protected. (thanks @jamesmacwhite).
+
+### Fixed
+- Fixed an error when exporting submissions when none exist.
+- Fixed Autopilot integration sending empty values for fields.
+
+## 1.6.24 - 2023-02-19
+
+### Added
+- Added tags support for ActiveCampaign CRM integration for contact objects.
+- Added validation rule for Address field Zip/Postcode length.
+- Added `dateCreated` support for Feed Me importing submissions.
+- Added ability to change queue job description. (thanks @jamesmacwhite).
+
+### Changed
+- Microsoft Dynamics 365 - Order fields in mapping by required status first followed by name ASC. (thanks @jamesmacwhite).
+- Numerous Microsoft Dynamics 365 improvements and updates (see https://github.com/verbb/formie/pull/1263). (thanks @jamesmacwhite).
+
+### Fixed
+- Fixed sent notifications throwing an error for `CC` and `BCC` values.
+- Fixed an error when creating a form from an outdated stencil.
+- Fixed being unable to query Submissions by their `title`.
+- Fixed an error with saving Hidden field content.
+- Fixed Feed Me integration not importing some field types.
+
+### Removed
+- Remove deprecated `countryRestrict` from Phone field.
+
+## 1.6.23 - 2023-02-11
+
+### Fixed
+- Fixed an error with most mailers sending large attachments (over 15mb) to email notifications.
+
+## 1.6.22 - 2023-01-30
+> {warning} If you are using Twig in hidden fields' default value, refer to breaking changes.
+
+### Added
+- Added Solspace Calendar Event element integration.
+- Added `enableLargeFieldStorage` plugin setting to allow creating large forms exceeding 100+ fields.
+- Added support for `postal_town` for Google Places address provider, as a fallback when populating City values (useful for UK).
+
+### Changed
+- Email content referencing single field values now escapes HTML content for all fields.
+- Increased the height of the `textarea` element for Multi-Line Text fields in the control panel when editing Submissions.
+- Integration settings for forms now only return settings for ReCAPTCHA and hCaptcha captchas when querying via GraphQL.
+
+### Fixed
+- Fixed recommended fields being marked as required for Microsoft Dynamics CRM integration.
+- Fixed an error with dashboard widget for Postgres.
+- Fixed a Twig injection vulnerability for Hidden fields.
+- Fixed an issue where `Integration::EVENT_MODIFY_FIELD_MAPPING_VALUE` wasn’t being fired in a queue job.
+- Fixed pre-populated date fields not submitting their values correctly with the date picker enabled.
+- Fixed calendar-based Date fields showing duplicate asterisks when a required field.
+- Fixed date parsing for integrations for some formats.
+- Fixed a browser formatting warning for Date fields in some instances.
+- Fixed text limits not working correctly for Rich Text-enabled Multi-Line fields.
+- Fixed an issue where form validation could be skipped in some cases.
+- Fixed Single-Line and Multi-Line Text fields not respecting Content Encryption settings.
+- Fixed an error with reCAPTCHA settings using GraphQL.
+- Fixed `setFieldSettings()` snapshot data persisting beyond the current submission on the front-end.
+- Fixed an issue with MySQL 8 and field handle column lengths.
+
+### Breaking Changes
+- Hidden field "Default Value" now no longer supports full Twig syntax (anything that requires double `{{` brackets). Shorthand (`{`) Twig is still supported.
+
+## 1.6.21 - 2022-12-15
+
+### Changed
+- Moved `updateFormHash` to Flatpickr `onReady` to ensure the form hash is updated when Flatpickr is ready.
+
+### Fixed
+- Fixed an issue with MySQL 8 and field handle column lengths.
+- Fixed Flatpickr triggering unload warnings for non-English locale sites.
+- Fixed Email fields when marked as unique, not validating correctly when editing a submission.
+
+## 1.6.20 - 2022-12-06
+
+### Changed
+- Updated Microsoft Dynamics CRM integration connection to use a limited query for performance.
+
+### Fixed
+- Fixed an issue where single-page, Ajax forms would be hidden when encountering a server-side error (like a timeout request).
+- Fixed a JS error with empty calculation fields.
+- Fixed accessibility issues for Flatpickr-based Date/Time fields.
+- Fixed an issue with Microsoft Dynamics when mapping to campaigns.
+
+## 1.6.19 - 2022-11-19
+
+### Added
+- Added pagination to Monday integration to fetch boards over 100.
+- Added `IntegrationField::TYPE_DATECLASS` to handle mapping to Date fields and date attributes for Entry element integrations.
+
+### Changed
+- Improve performance of Microsoft Dynamics CRM integration when fetching entity definitions.
+
+### Fixed
+- Fixed "Overwrite Values" for element integrations for User photos.
+- Fixed return type for Google Sheets integration for `getProxyRedirect()`.
+
+## 1.6.18 - 2022-11-13
+
+### Added
+- Added “Overwrite Content” setting for Element integrations to control whether null values should be applied to element content.
+
+### Changed
+- Updated to use `App::parseBooleanEnv` where applicable for integration settings.
+
+### Fixed
+- Fixed the “Proxy Redirect URI” for Google Sheets not saving correctly when using .env variables.
+
+## 1.6.17 - 2022-11-06
+
+### Added
+- Added more clarity to Freeform/Sprout Forms migrations when a submission failed to migrate.
+
+### Fixed
+- Fixed visibly disabled fields not having their default value used when populating a submission content.
+
+## 1.6.16 - 2022-10-29
+
+### Fixed
+Fixed an error when setting the submission status from the submission element index action.
+
+## 1.6.15 - 2022-10-23
+
+### Added
+- Added `descriptionHtml` attribute to Agree fields.
+- Added support for integration fields to contain emojis.
+
+### Changed
+- Changed integration Redirect URI’s to no longer rely on `usePathInfo`, instead use a site route.
+
+### Fixed
+- Fixed cached integration settings containing emojis.
+- Fixed Pardot Endpoint URL setting not persisting correctly.
+- Fixed integration settings not persisting on page load.
+- Fixed word limits of text fields not showing words left correctly.
+- Fixed Category fields where children of the selected Root Category weren't returned. (thanks @taylordaughtry).
+- Fixed `Captcha::getOrSet` always throws unnecessary warning in logs. (thanks @leevigraham).
+
+## 1.6.14 - 2022-09-25
+
+### Added
+- Add “Form Handler” endpoint settings to Pardot CRM integration.
+
+### Changed
+- Consolidate payload-creation for Webhook/Miscellaneous integrations.
+
+## 1.6.13 - 2022-09-18
+
+### Fixed
+- Fix (again) Microsoft Dynamics not using `SchemaName` for custom field handles.
+
+## 1.6.12 - 2022-09-11
+
+### Added
+- Added `formie/sent-notifications/delete` console command.
+
+## 1.6.11 - 2022-09-04
+
+### Added
+- Added `prune-content-table-fields` console command.
+
+### Fixed
+- Fixed Microsoft Dynamics not using `SchemaName` for custom field handles.
+- Fixed serialization of element fields when being sent via Webhooks.
+- Fixed an error with HubSpot CRM integration.
+- Fixed File Upload fields including some allowed extensions that they shouldn’t.
+
+## 1.6.10 - 2022-08-27
+
+### Added
+- Added new HubSpot CRM integration due to [API changes](https://developers.hubspot.com/changelog/upcoming-api-key-sunset).
+
+### Fixed
+- Fixed check for malicious file upload checks, causing submissions with File Upload fields not to save.
+- Fixed File Upload `inputTypeName` not returning correctly for GraphQL queries.
+
+## 1.6.9 - 2022-08-22
+
+### Added
+- Added more logging to Salesforce integration with regards to duplicate lead task-creation.
+
+### Fixed
+- Fixed cloning Group/Repeater fields not correctly cloning their inner fields.
+
+## 1.6.8 - 2022-08-17
+
+### Fixed
+- Fixed an error introduced in 1.6.7 causing client-side validation not to work correctly.
+
+## 1.6.7 - 2022-08-16
+
+### Added
+- Added `beforeEvaluate` and `afterEvaluate` for Calculations field’s JS.
+
+### Fixed
+- Fixed File Upload fields not handling invalid POST data send by malicious parties.
+- Fixed an error when trying to create a Sent Notification when the body of a notification contained an Emoji.
+- Fixed extra space when using `formClasses` for forms.
+- Fixed front-end JS not initializing correctly when using custom ID attributes for the form element.
+
+## 1.6.6 - 2022-08-07
+
+### Added
+- Added `ipAddress`, `isIncomplete`, `isSpam`, `spamReason` properties to GraphQL queries for submissions.
+- Added `isIncomplete` and `isSpam` arguments to GraphQL queries for submissions.
+- Added console formatting for Sprout Forms and Freeform migrations.
+- Added `form-handle` option to migrate console commands.
+- Added `formie/migrate/migrate-freeform` console command.
+- Added Mailjet Email Marketing integration. (thanks @jmauzyk).
+- Added `assetId` parameter for GraphQL mutations for File Upload data.
+- Added support for Emojis for Single-Line & Multi-Line Text fields.
+
+### Changed
+- Single-Line and Multi-Line Text fields with limits now allow over-typing above limits, showing negative character/words.
+
+### Fixed
+- Fixed migrations not allowing `EVENT_MODIFY_FIELD` event to override fields.
+- Fixed an error when migrating notifications for Sprout Forms and Freeform.
+- Fixed Sprout Forms migration with custom fields.
+- Fixed an error with Repeater/Table fields and row collisions when deleting and adding the same number of rows.
+- Fixed an error where min/max dates for Date fields weren’t being set correctly for Flatpickr.
+- Fixed an error when disconnecting from an OAuth-based integration when the original token didn’t exist.
+- Fixed JS text limits not counting string with emoji’s properly and improve multibyte string checks.
+- Fixed JS text limits not working when pasting in content.
+- Fixed JS text limits not showing the correct values when server-side errors exist.
+- Fixed incorrect string-length calculation when limiting text field values.
+- Fixed `formie/forms/refresh-tokens` endpoint not returning captchas. (thanks @cholawo).
+
+### Removed
+- Removed `maxlength` attribute on Single-Line and Multi-Line Text fields, due to inability to properly count emojis.
+
+## 1.6.5 - 2022-07-25
+
+### Fixed
+- Fix `allowAdminChanges` for integration settings hiding instructions.
+
+## 1.6.4 - 2022-07-18
+
+### Changed
+- Make “Upload Location” setting full-width for File Upload fields in the control panel.
+
+### Fixed
+- Fix an error when Repeater fields’ JS wasn’t initialized for some fields in the control panel when editing a submission.
+- Fix an error with server-side errors not being placed correctly when rendering multiple forms.
+
+## 1.6.3 - 2022-07-11
+
+### Changed
+- Changed front-end JS to handle already-loaded page events when initializing.
+
+### Fixed
+- Fixed file size calculation mismatch for File Upload fields and server-side validation.
+- Fixed pre-populating a Phone field not working.
+
+## 1.6.2 - 2022-07-01
+
+### Changed
+- Table field preview in the form builder now always showing at least one row of cells.
+
+### Fixed
+- Fixed an error with Categories fields
+- Fixed an error with Salesforce CRM integration, when submitting a contact with an email. (thanks @JeroenOnstuimig).
+- Fixed IP Address of a submission being overwritten when editing a submission in the control panel.
+- Fixed reCAPTCHA integrations not reporting back the spam reason when failing due to score threshold.
+- Fixed Flatpickr 12-hour time formats not being set correctly.
+- Fixed some integrations not respecting `.env` variable for boolean-like settings.
+- Fixed redirect issue when editing a submission in the control panel on a non-primary site.
+- Fixed an incorrect validation for Table fields, when “Maximum instances” was set.
+- Fixed scroll-to-alert behaviour not working correctly when also hiding the form after success.
+- Fixed JS scroll-to-alert factors in `scroll-margin` and `scroll-padding`.
+- Fixed server-side validation errors not appearing for Ajax-enabled forms for some fields (multiple file upload, elements).
+
+## 1.6.1 - 2022-06-20
+
+### Changed
+- Slack integration channels now sort channels alphabetically.
+
+### Fixed
+- Fix file uploads not respecting data retention settings when run via the `formie/gc/prune-data-retention-submissions` console command.
+- Fix pruning incomplete submissions and data retention processes not working correctly.
+- Fix hidden field values with custom default value containing variables not evaluating values correctly.
+- Fix incorrect mutation input type for File Upload fields for GraphQL.
+
 ## 1.6.0 - 2022-06-11
 
 ### Added
@@ -72,7 +402,6 @@ The fix was already present for Contacts.
 - Fixed an error when applying project config updates with stencils.
 
 ## 1.5.15 - 2022-04-23
-
 > {warning} If you are using custom templates, or template overrides, please read through the breaking changes.
 
 ### Added
@@ -807,7 +1136,6 @@ The fix was already present for Contacts.
 - Removed `columnWidth` from GraphQL queries (it did nothing).
 
 ## 1.4.13 - 2021-08-09
-
 > {warning} Please read through the Breaking Changes before updating.
 
 ### Added
@@ -1098,7 +1426,6 @@ The fix was already present for Contacts.
 - Fixed fatal errors when installing from a fresh install.
 
 ## 1.4.0 - 2021-04-20
-
 > {warning} Please read through the Breaking Changes before updating.
 
 ### Added
@@ -1630,7 +1957,6 @@ The fix was already present for Contacts.
 - Fixed HTML field errors when the vendor folder didn’t have write permissions (such as Servd).
 
 ## 1.3.3 - 2020-12-06
-
 > {warning} If you are overriding templates for `field.html`, you **must** update your template to include `data-field-config="{{ field.getConfigJson(form) | json_encode | raw }}"`. This is the new and improved method for fields to define their config settings, picked up by JavaScript classes. Without making this change, field JS will not work. Refer to [this commit change](https://github.com/verbb/formie/commit/c5d5eda10b39063e1cf782b38f84bebe0da6fdf9#diff-ba26d5dbf9dcd3281c9b0b3c16f822eff1d2943c2134518d4ecea26d10907be4R90-R92).
 
 ### Added

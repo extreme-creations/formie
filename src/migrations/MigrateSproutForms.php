@@ -29,6 +29,7 @@ use craft\helpers\ArrayHelper;
 use craft\helpers\Console;
 use craft\helpers\Json;
 
+use yii\console\Controller;
 use yii\helpers\Markdown;
 
 use Throwable;
@@ -77,6 +78,11 @@ class MigrateSproutForms extends Migration
      */
     private $_reservedHandles;
 
+    /**
+     * @var Controller
+     */
+    private $_consoleRequest = null;
+
 
     /**
      * @inheritdoc
@@ -102,10 +108,15 @@ class MigrateSproutForms extends Migration
         return false;
     }
 
+    public function setConsoleRequest($value)
+    {
+        $this->_consoleRequest = $value;
+    }
+
     private function _migrateForm()
     {
         $settings = Formie::$plugin->getSettings();
-        $transaction = Craft::$app->db->beginTransaction();
+        $transaction = Craft::$app->getDb()->beginTransaction();
         $sproutFormsForm = $this->_sproutForm;
 
         $this->stdout("Form: Preparing to migrate form “{$sproutFormsForm->handle}”.");
@@ -287,7 +298,7 @@ class MigrateSproutForms extends Migration
             }
 
             if (!Craft::$app->getElements()->saveElement($event->submission)) {
-                $this->stdout("    > Failed to save submission “{$event->submission->id}”.", Console::FG_RED);
+                $this->stdout("    > Failed to save Formie submission for Sprout Forms entry “{$entry->id}”.", Console::FG_RED);
 
                 foreach ($event->submission->getErrors() as $attr => $errors) {
                     foreach ($errors as $error) {
@@ -295,7 +306,7 @@ class MigrateSproutForms extends Migration
                     }
                 }
             } else {
-                $this->stdout("    > Migrated submission “{$event->submission->id}”.", Console::FG_GREEN);
+                $this->stdout("    > Migrated Sprout Forms entry “{$entry->id}” to Formie submission “{$event->submission->id}”.", Console::FG_GREEN);
             }
         }
 
@@ -341,6 +352,7 @@ class MigrateSproutForms extends Migration
                     $newNotification->formId = $this->_form->id;
                     $newNotification->name = $notification->title;
                     $newNotification->subject = $notification->subjectLine;
+                    $newNotification->recipients = 'email';
                     $newNotification->to = $notification->recipients;
                     $newNotification->cc = $notification->cc;
                     $newNotification->bcc = $notification->bcc;
@@ -440,23 +452,26 @@ class MigrateSproutForms extends Migration
                 $pageFields = [];
 
                 foreach ($tab->getFields() as $field) {
-                    if ($newField = $this->_mapField($field)) {
-                        // Fire a 'modifyField' event
-                        $event = new ModifyMigrationFieldEvent([
-                            'form' => $this->_form,
-                            'originForm' => $form,
-                            'field' => $field,
-                            'newField' => $newField,
-                        ]);
-                        $this->trigger(self::EVENT_MODIFY_FIELD, $event);
+                    $newField = $this->_mapField($field);
 
-                        $newField = $event->newField;
+                    // Fire a 'modifyField' event
+                    $event = new ModifyMigrationFieldEvent([
+                        'form' => $this->_form,
+                        'originForm' => $form,
+                        'field' => $field,
+                        'newField' => $newField,
+                    ]);
+                    $this->trigger(self::EVENT_MODIFY_FIELD, $event);
 
-                        if (!$event->isValid) {
-                            $this->stdout("    > Skipped field “{$newField->handle}” due to event cancellation.", Console::FG_YELLOW);
-                            continue;
-                        }
+                    if (!$event->isValid) {
+                        $this->stdout("    > Skipped field “{$newField->handle}” due to event cancellation.", Console::FG_YELLOW);
+                        continue;
+                    }
 
+                    // Allow events to modify the `newField`
+                    $newField = $event->newField;
+
+                    if ($newField) {
                         $newField->validate();
 
                         if ($newField->hasErrors()) {
@@ -702,6 +717,11 @@ class MigrateSproutForms extends Migration
                 $newField->source = $field->source;
                 $newField->sources = $field->sources;
                 break;
+            case sproutfields\Url::class:
+                $newField = new formfields\SingleLineText();
+                $this->_applyFieldDefaults($newField);
+
+                break;
             case sproutfields\Users::class:
                 /* @var BaseRelationField $field */
                 $newField = new formfields\Users();
@@ -713,9 +733,7 @@ class MigrateSproutForms extends Migration
                 $newField->sources = $field->sources;
                 break;
             default:
-                $newField = new formfields\SingleLineText();
-                $this->_applyFieldDefaults($newField);
-                break;
+                return null;
         }
 
         $newField->name = $field->name;
@@ -836,13 +854,17 @@ class MigrateSproutForms extends Migration
 
     private function stdout($string, $color = '')
     {
-        $class = '';
+        if ($this->_consoleRequest) {
+            $this->_consoleRequest->stdout($string . PHP_EOL, $color);
+        } else {
+            $class = '';
 
-        if ($color) {
-            $class = 'color-' . $color;
+            if ($color) {
+                $class = 'color-' . $color;
+            }
+
+            echo '<div class="log-label ' . $class . '">' . Markdown::processParagraph($string) . '</div>';
         }
-
-        echo '<div class="log-label ' . $class . '">' . Markdown::processParagraph($string) . '</div>';
     }
 
     private function getExceptionTraceAsString($exception) {

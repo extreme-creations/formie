@@ -13,6 +13,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -74,7 +75,7 @@ class Zoho extends Crm
      */
     public function getClientId(): string
     {
-        return Craft::parseEnv($this->clientId);
+        return App::parseEnv($this->clientId);
     }
 
     /**
@@ -82,7 +83,15 @@ class Zoho extends Crm
      */
     public function getClientSecret(): string
     {
-        return Craft::parseEnv($this->clientSecret);
+        return App::parseEnv($this->clientSecret);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getUseDeveloper(): string
+    {
+        return App::parseBooleanEnv($this->useDeveloper);
     }
 
     /**
@@ -367,7 +376,7 @@ class Zoho extends Crm
         $url = $this->apiDomain ?? 'https://www.zohoapis.com';
         $url = rtrim($url, '/');
 
-        if ($this->useDeveloper) {
+        if ($this->getUseDeveloper()) {
             $url = 'https://developer.zohoapis.com';
         }
 
@@ -447,7 +456,7 @@ class Zoho extends Crm
 
             // Exclude any names
             if (in_array($field['api_name'], $excludeNames)) {
-                 continue;
+                continue;
             }
 
             $options = [];

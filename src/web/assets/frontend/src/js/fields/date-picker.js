@@ -4,6 +4,28 @@ import flatpickr from 'flatpickr';
 
 require('flatpickr/dist/flatpickr.min.css');
 
+// A Flatpickr plugin to copy all attributes on the input to the `altInput` for accessibility
+function attributesPlugin() {
+    return function(fp) {
+        return {
+            onReady() {
+                const excludedAttributes = ['type', 'name', 'value'];
+
+                // Copy all attributes from normal input to `altInput` - except some
+                fp.input.getAttributeNames().forEach(attribute => {
+                    if (!excludedAttributes.includes(attribute)) {
+                        fp.altInput.setAttribute(attribute, fp.input.getAttribute(attribute));
+
+                        fp.input.removeAttribute(attribute);
+                    }
+                });
+
+                fp.loadedPlugins.push('labelPlugin');
+            },
+        };
+    };
+}
+
 export class FormieDatePicker {
     constructor(settings = {}) {
         this.$form = settings.$form;
@@ -40,12 +62,19 @@ export class FormieDatePicker {
             disableMobile: true,
             allowInput: true,
             altInput: true,
-            altFormat: this.dateTimeFormat,
+            altFormat: this.prepareFormat(),
             dateFormat: 'Y-m-d H:i:S',
             hourIncrement: 1,
             minuteIncrement: 1,
             minDate: this.minDate,
             maxDate: this.maxDate,
+            plugins: [new attributesPlugin({})],
+            onReady: (dateObj, dateStr, instance) => {
+                // Update the form hash, so we don't get change warnings
+                if (this.form.formTheme) {
+                    this.form.formTheme.updateFormHash();
+                }
+            },
         };
 
         // Include time for time-only and datetime
@@ -89,11 +118,6 @@ export class FormieDatePicker {
 
         // Load in the locale as required
         this.loadLocale();
-
-        // Update the form hash, so we don't get change warnings
-        if (this.form.formTheme) {
-            this.form.formTheme.updateFormHash();
-        }
     }
 
     loadLocale() {
@@ -108,6 +132,11 @@ export class FormieDatePicker {
             $script.async = false;
             $script.onload = () => {
                 this.datepicker.set('locale', this.locale);
+
+                // Update the form hash, so we don't get change warnings
+                if (this.form.formTheme) {
+                    this.form.formTheme.updateFormHash();
+                }
             };
             
             document.body.appendChild($script);
@@ -132,6 +161,12 @@ export class FormieDatePicker {
         });
 
         return opts;
+    }
+
+    prepareFormat() {
+        // Convert date format from PHP to Flatpickr
+        // https://flatpickr.js.org/formatting/
+        return this.dateTimeFormat.replace('A', 'K').replace('a', 'K').replace('s', 'S').replace('g', 'h').replace('h', 'G');
     }
 }
 

@@ -86,9 +86,13 @@ class Phone extends FormField implements SubfieldInterface, PreviewableFieldInte
     {
         if ($this->countryEnabled) {
             return Schema::TYPE_TEXT;
-        } else {
-            return Schema::TYPE_STRING;
         }
+
+        if (Formie::$plugin->getSettings()->enableLargeFieldStorage) {
+            return Schema::TYPE_TEXT;
+        }
+
+        return Schema::TYPE_STRING;
     }
 
     /**
@@ -99,7 +103,7 @@ class Phone extends FormField implements SubfieldInterface, PreviewableFieldInte
         if ($this->countryEnabled) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -167,7 +171,6 @@ class Phone extends FormField implements SubfieldInterface, PreviewableFieldInte
             'countryCollapsed' => true,
             'countryShowDialCode' => true,
             'countryDefaultValue' => '',
-            'countryRestrict' => false,
             'countryAllowed' => [],
         ];
     }
@@ -275,7 +278,7 @@ class Phone extends FormField implements SubfieldInterface, PreviewableFieldInte
     public function getPreviewInputHtml(): string
     {
         return Craft::$app->getView()->renderTemplate('formie/_formfields/phone/preview', [
-            'field' => $this
+            'field' => $this,
         ]);
     }
 
@@ -338,7 +341,7 @@ class Phone extends FormField implements SubfieldInterface, PreviewableFieldInte
                     'help' => Craft::t('formie', 'Entering a default value will place the value in the field when it loads.'),
                     'name' => 'countryDefaultValue',
                     'options' => array_merge(
-                        [[ 'label' => Craft::t('formie', 'Select an option'), 'value' => '' ]],
+                        [['label' => Craft::t('formie', 'Select an option'), 'value' => '']],
                         static::getCountryOptions()
                     ),
                 ]),
@@ -404,5 +407,18 @@ class Phone extends FormField implements SubfieldInterface, PreviewableFieldInte
             SchemaHelper::enableConditionsField(),
             SchemaHelper::conditionsField(),
         ];
+    }
+
+
+    // Protected Methods
+    // =========================================================================
+
+    /**
+     * @inheritDoc
+     */
+    protected function setPrePopulatedValue($value)
+    {
+        // Only the number can be applied from pre-population
+        return ['number' => $value];
     }
 }

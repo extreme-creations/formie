@@ -81,6 +81,7 @@ class Submission extends Element
     private $_fieldContext;
     private $_contentTable;
     private $_pagesForField;
+    private $_assetsToDelete = [];
 
 
     // Static
@@ -188,7 +189,7 @@ class Submission extends Element
         // This is otherwise only enabled during element propagation, which doesn't happen for submissions.
         if (version_compare(Craft::$app->getInfo()->version, '3.7.32', '>=')) {
             foreach ($rules as $key => $rule) {
-                list($attribute, $validator) = $rule;
+                [$attribute, $validator] = $rule;
 
                 if ($validator === SiteIdValidator::class) {
                     $rules[$key]['allowDisabled'] = true;
@@ -197,7 +198,7 @@ class Submission extends Element
         }
 
         $fieldsByHandle = [];
-        
+
         if ($fieldLayout = $this->getFieldLayout()) {
             // Check when we're doing a submission from the front-end, and we choose to validate the current page only
             // Remove any custom fields that aren't in the current page. These are added by default
@@ -208,7 +209,7 @@ class Submission extends Element
                 $currentPageFieldHandles = ArrayHelper::getColumn($currentPageFields, 'handle');
 
                 foreach ($rules as $key => $rule) {
-                    list($attribute, $validator) = $rule;
+                    [$attribute, $validator] = $rule;
                     $attribute = is_array($attribute) ? $attribute[0] : $attribute;
 
                     if (strpos($attribute, 'field:') !== false) {
@@ -228,7 +229,7 @@ class Submission extends Element
             // Evaulate field conditions. What if this is a required field, but conditionally hidden?
             foreach ($rules as $key => $rule) {
                 foreach ($fields as $field) {
-                    list($attribute, $validator) = $rule;
+                    [$attribute, $validator] = $rule;
                     $attribute = is_array($attribute) ? $attribute[0] : $attribute;
 
                     if ($attribute === "field:{$field->handle}") {
@@ -248,7 +249,7 @@ class Submission extends Element
                         continue;
                     }
 
-                    list($attribute, $validator) = $rule;
+                    [$attribute, $validator] = $rule;
                     $attribute = is_array($attribute) ? $attribute[0] : $attribute;
 
                     if ($attribute === "field:{$field->handle}") {
@@ -276,7 +277,7 @@ class Submission extends Element
         // Ensure that any rules defined in events actually exists and are valid for this submission/form.
         // Otherwise fatal errors will occur trying to validate a field that doesn't exist in this context.
         foreach ($event->rules as $key => $rule) {
-            list($attribute, $validator) = $rule;
+            [$attribute, $validator] = $rule;
             $attr = is_array($attribute) ? $attribute[0] : $attribute;
 
             if (strpos($attr, 'field:') !== false) {
@@ -306,8 +307,8 @@ class Submission extends Element
                 'key' => '*',
                 'label' => Craft::t('formie', 'All forms'),
                 'criteria' => ['formId' => $ids],
-                'defaultSort' => ['formie_submissions.title', 'desc']
-            ]
+                'defaultSort' => ['formie_submissions.title', 'desc'],
+            ],
         ];
 
         $sources[] = ['heading' => Craft::t('formie', 'Forms')];
@@ -432,7 +433,7 @@ class Submission extends Element
                 'id' => AttributeTypecastBehavior::TYPE_INTEGER,
                 'formId' => AttributeTypecastBehavior::TYPE_STRING,
                 'statusId' => AttributeTypecastBehavior::TYPE_INTEGER,
-            ]
+            ],
         ];
 
         return $behaviors;
@@ -586,10 +587,15 @@ class Submission extends Element
         $this->_form = $form;
         $this->formId = $form->id;
 
-        // When setting the form, see if there's a in-session snapshot, or if there's a saved 
+        // When setting the form, see if there's an in-session snapshot, or if there's a saved
         // snapshot from the database. This will be field settings set via templates which we want
-        // to apply to fields in our form, for the this submission.
-        $this->snapshot = $form->getSnapshotData() ?: $this->snapshot;
+        // to apply to fields in our form, for this submission. Only do this for front-end checks
+        // and if there's no already-saved snapshot data
+        if (Craft::$app->getRequest()->getIsSiteRequest() && !$this->snapshot) {
+            if ($snapshotData = $form->getSnapshotData()) {
+                $this->snapshot = $snapshotData;
+            }
+        }
 
         $fields = $this->snapshot['fields'] ?? [];
 
@@ -750,6 +756,19 @@ class Submission extends Element
                         $this->setFieldValue($field->handle, []);
                     } else {
                         $this->setFieldValue($field->handle, null);
+                    }
+                }
+            }
+        }
+
+        // If the final page, populate any visibly disabled fields with empty values with their default
+        if ($this->getFieldLayout() && !$this->isIncomplete) {
+            foreach ($this->getFieldLayout()->getFields() as $field) {
+                if ($field->visibility === 'disabled') {
+                    $value = $this->getFieldValue($field->handle);
+
+                    if ($field->isEmpty($value)) {
+                        $this->setFieldValue($field->handle, $field->defaultValue);
                     }
                 }
             }
@@ -996,6 +1015,19 @@ class Submission extends Element
             }
         }
 
+        // Check if we should hard-delete any file uploads - note once an asset is soft-deleted
+        // it's file is hard-deleted gone, so we cannot restore a file upload. I'm aware of `keepFileOnDelete`, but there's
+        // no way to remove that file on hard-delete, so that won't work.
+        // See https://github.com/craftcms/cms/issues/5074
+        if ($form && $form->fileUploadsAction === 'delete') {
+            foreach ($form->getFields() as $field) {
+                if ($field instanceof FileUpload) {
+                    // Store them now while we still have access to them, to delete in `afterDelete()`
+                    $this->_assetsToDelete = array_merge($this->_assetsToDelete, $this->getFieldValue($field->handle)->all());
+                }
+            }
+        }
+
         return parent::beforeDelete();
     }
 
@@ -1004,23 +1036,13 @@ class Submission extends Element
      */
     public function afterDelete()
     {
-        $form = $this->getForm();
         $elementsService = Craft::$app->getElements();
 
-        // Check if we should hard-delete any file uploads - note once an asset is soft-deleted
-        // it's file is hard-deleted gone, so we cannot restore a file upload. I'm aware of `keepFileOnDelete`, but there's
-        // no way to remove that file on hard-delete, so that won't work.
-        // See https://github.com/craftcms/cms/issues/5074
-        if ($form && $form->fileUploadsAction === 'delete') {
-            foreach ($form->getFields() as $field) {
-                if ($field instanceof FileUpload) {
-                    $assets = $this->getFieldValue($field->handle)->all();
-
-                    foreach ($assets as $asset) {
-                        if (!$elementsService->deleteElement($asset)) {
-                            Formie::error("Unable to delete file ”{$asset->id}” for submission ”{$this->id}”: " . Json::encode($asset->getErrors()) . ".");
-                        }
-                    }
+        // Check if we have any assets to delete
+        if ($this->_assetsToDelete) {
+            foreach ($this->_assetsToDelete as $asset) {
+                if (!$elementsService->deleteElement($asset)) {
+                    Formie::error("Unable to delete file ”{$asset->id}” for submission ”{$this->id}”: " . Json::encode($asset->getErrors()) . ".");
                 }
             }
         }
@@ -1101,14 +1123,14 @@ class Submission extends Element
             case 'status':
                 $statusHandle = $this->getStatus();
                 $status = self::statuses()[$statusHandle] ?? null;
-                
+
                 return Html::tag('span', Html::tag('span', '', [
-                    'class' => array_filter([
-                        'status',
-                        $statusHandle,
-                        ($status ? $status['color'] : null)
-                    ]),
-                ]) . ($status ? $status['label'] : null), [
+                        'class' => array_filter([
+                            'status',
+                            $statusHandle,
+                            ($status ? $status['color'] : null),
+                        ]),
+                    ]) . ($status ? $status['label'] : null), [
                     'style' => [
                         'display' => 'flex',
                         'align-items' => 'center',
@@ -1148,17 +1170,17 @@ class Submission extends Element
             [
                 'label' => Craft::t('app', 'Title'),
                 'orderBy' => 'formie_submissions.title',
-                'attribute' => 'title'
+                'attribute' => 'title',
             ],
             [
                 'label' => Craft::t('app', 'Date Created'),
                 'orderBy' => 'elements.dateCreated',
-                'attribute' => 'dateCreated'
+                'attribute' => 'dateCreated',
             ],
             [
                 'label' => Craft::t('app', 'Date Updated'),
                 'orderBy' => 'elements.dateUpdated',
-                'attribute' => 'dateUpdated'
+                'attribute' => 'dateUpdated',
             ],
         ];
     }

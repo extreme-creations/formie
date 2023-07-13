@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -67,13 +68,7 @@ class ActiveCampaign extends EmailMarketing
             $lists = $this->_getPaginated('lists');
 
             // While we're at it, fetch the fields for the list
-            $response = $this->request('GET', 'fields', [
-                'query' => [
-                    'limit' => 100,
-                ],
-            ]);
-
-            $fields = $response['fields'] ?? [];
+            $fields = $this->_getPaginated('fields');
 
             foreach ($lists as $list) {
                 $listFields = array_merge([
@@ -178,8 +173,7 @@ class ActiveCampaign extends EmailMarketing
 
                 if ($tags) {
                     // Find all the tags first
-                    $response = $this->request('GET', 'tags');
-                    $existingTags = $response['tags'] ?? [];
+                    $existingTags = $this->_getPaginated('tags');
                     $tagIds = [];
 
                     // Process each tag
@@ -255,8 +249,8 @@ class ActiveCampaign extends EmailMarketing
         }
 
         return $this->_client = Craft::createGuzzleClient([
-            'base_uri' => trim(Craft::parseEnv($this->apiUrl), '/') . '/api/3/',
-            'headers' => ['Api-Token' => Craft::parseEnv($this->apiKey)],
+            'base_uri' => trim(App::parseEnv($this->apiUrl), '/') . '/api/3/',
+            'headers' => ['Api-Token' => App::parseEnv($this->apiKey)],
         ]);
     }
 
@@ -304,12 +298,12 @@ class ActiveCampaign extends EmailMarketing
 
             // // Only allow supported types
             if (!in_array($fieldType, $supportedFields)) {
-                 continue;
+                continue;
             }
 
             // Exclude any names
             if (in_array($fieldName, $excludeNames)) {
-                 continue;
+                continue;
             }
 
             $customFields[] = new IntegrationField([
@@ -348,7 +342,7 @@ class ActiveCampaign extends EmailMarketing
             'query' => [
                 'limit' => $limit,
                 'offset' => $offset,
-            ]
+            ],
         ]);
 
         $newItems = $response[$endpoint] ?? [];

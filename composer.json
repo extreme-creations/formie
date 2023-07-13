@@ -2,7 +2,7 @@
     "name": "verbb/formie",
     "description": "The most user-friendly forms plugin for Craft.",
     "type": "craft-plugin",
-    "version": "1.6.0",
+    "version": "1.6.29",
     "keywords": [
         "craft",
         "cms",
@@ -39,7 +39,7 @@
         "league/oauth2-client": "^2.4.0",
         "league/oauth2-google": "^3.0",
         "thenetworg/oauth2-azure": "^2.0",
-        "dompdf/dompdf": "^1.0.2",
+        "dompdf/dompdf": "^1.0.2 || ^2.0.0",
         "verbb/base": "^1.0.0"
     },
     "autoload": {

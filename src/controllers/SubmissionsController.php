@@ -70,7 +70,7 @@ class SubmissionsController extends Controller
     {
         $settings = Formie::$plugin->getSettings();
 
-        if ($action->id === 'submit' && Craft::$app->user->isGuest && !$settings->enableCsrfValidationForGuests) {
+        if ($action->id === 'submit' && Craft::$app->getUser()->isGuest && !$settings->enableCsrfValidationForGuests) {
             $this->enableCsrfValidation = false;
         }
 
@@ -190,12 +190,6 @@ class SubmissionsController extends Controller
         } else {
             $variables['title'] = Craft::t('formie', 'Create a new submission');
         }
-
-        // Can't just use the submissions getCpEditUrl() because that might include the site handle when we don't want it
-        $variables['baseCpEditUrl'] = "formie/submissions/$formHandle/{id}";
-
-        // Set the "Continue Editing" URL
-        $variables['continueEditingUrl'] = $variables['baseCpEditUrl'] . (Craft::$app->getIsMultiSite() && Craft::$app->getSites()->currentSite->id !== $variables['site']->id ? '/' . $variables['site']->handle : '');
 
         $formConfigJson = $variables['submission']->getForm()->getFrontEndJsVariables();
 
@@ -1098,7 +1092,8 @@ class SubmissionsController extends Controller
         $submission->setFieldValuesFromRequest($this->_namespace);
         $submission->setFieldParamNamespace($this->_namespace);
 
-        if ($form->settings->collectIp) {
+        // Only ever set for a brand-new submission
+        if (!$submission->id && $form->settings->collectIp) {
             $submission->ipAddress = $request->userIP;
         }
 
@@ -1172,6 +1167,13 @@ class SubmissionsController extends Controller
     {
         $request = Craft::$app->getRequest();
         $value = $request->getParam($name);
+
+        // Special case for `submitAction`, where we don't want just anything passed in
+        if ($name === 'submitAction') {
+            if (!in_array($value, ['submit', 'back', 'save'])) {
+                throw new BadRequestHttpException('Request has invalid param ' . $name);
+            }
+        }
 
         if ($value !== null) {
             // Go case-by-case, so it's easier to handle, and more predictable

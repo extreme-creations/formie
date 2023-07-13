@@ -11,8 +11,6 @@ use verbb\formie\events\IntegrationFormSettingsEvent;
 use verbb\formie\events\ModifyFieldIntegrationValuesEvent;
 use verbb\formie\events\SendIntegrationPayloadEvent;
 use verbb\formie\fields\formfields\Agree;
-use verbb\formie\helpers\UrlHelper as FormieUrlHelper;
-use verbb\formie\models\IntegrationCollection;
 use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 use verbb\formie\records\Integration as IntegrationRecord;
@@ -24,12 +22,15 @@ use craft\helpers\ArrayHelper;
 use craft\helpers\DateTimeHelper;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
+use craft\helpers\UrlHelper;
 use craft\validators\HandleValidator;
 use craft\validators\UniqueValidator;
 use craft\web\Response;
 
 use League\OAuth2\Client\Provider\GenericProvider;
 use GuzzleHttp\Exception\RequestException;
+
+use LitEmoji\LitEmoji;
 
 abstract class Integration extends SavableComponent implements IntegrationInterface
 {
@@ -44,7 +45,7 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
     const EVENT_AFTER_FETCH_FORM_SETTINGS = 'afterFetchFormSettings';
     const EVENT_MODIFY_FIELD_MAPPING_VALUES = 'modifyFieldMappingValues';
     const EVENT_MODIFY_FIELD_MAPPING_VALUE = 'modifyFieldMappingValue';
-    
+
     const TYPE_ADDRESS_PROVIDER = 'addressProvider';
     const TYPE_CAPTCHA = 'captcha';
     const TYPE_ELEMENT = 'element';
@@ -192,6 +193,12 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
             }
         }
 
+        if ($integrationField->getType() === IntegrationField::TYPE_DATECLASS) {
+            if ($date = DateTimeHelper::toDateTime($value)) {
+                return $date;
+            }
+        }
+
         if ($integrationField->getType() === IntegrationField::TYPE_NUMBER) {
             return intval($value);
         }
@@ -261,7 +268,7 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
                 'dateUpdated',
                 'uid',
                 'title',
-            ]
+            ],
         ];
 
         return $rules;
@@ -402,7 +409,10 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
         // If using the cache (the default), don't fetch it automatically. Just save API requests a tad.
         if ($useCache) {
             $settings = $this->getCache('settings') ?: [];
-            
+
+            // Add support for emoji in cached content
+            $settings = Json::decode(LitEmoji::shortcodeToUnicode(Json::encode($settings)));
+
             // De-serialize it from the cache back into full, nested class objects
             $formSettings = new IntegrationFormSettings();
             $formSettings->unserialize($settings);
@@ -434,7 +444,7 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
 
         // Save a serialised version to the cache, that retains classes
         $this->setCache(['settings' => $settings->serialize()]);
-        
+
         // Always deal with a `IntegrationFormSettings` model
         return $settings;
     }
@@ -573,7 +583,7 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
      */
     public function getRedirectUri()
     {
-        return FormieUrlHelper::siteActionUrl('formie/integrations/callback');
+        return UrlHelper::siteUrl('formie/integrations/callback');
     }
 
     /**
@@ -670,7 +680,7 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
 
         return [
             'success' => true,
-            'token' => $token
+            'token' => $token,
         ];
     }
 
@@ -717,7 +727,7 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
     {
         $response = $this->getClient()->request($method, ltrim($uri, '/'), $options);
 
-        return Json::decode((string)$response->getBody());
+        return Json::decode($response->getBody()->getContents());
     }
 
     /**
@@ -768,7 +778,13 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
 
                 // Be sure the check against empty values and not map them. '', null and [] are all empty
                 // but 0 is a totally valid value.
-                if (!self::isEmpty($fieldValue)) {
+                if (self::isEmpty($fieldValue)) {
+                    // Check if an element integration, where we can check against overwrite values.
+                    // If it's empty, and we're overwriting values, we don't care
+                    if ($this instanceof Element && $this->overwriteValues) {
+                        $fieldValues[$tag] = $fieldValue;
+                    }
+                } else {
                     $fieldValues[$tag] = $fieldValue;
                 }
             } else {
@@ -965,12 +981,49 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
         return null;
     }
 
+    public function allowedGqlSettings(): array
+    {
+        return [];
+    }
+
     // Private Methods
     // =========================================================================
 
     /**
      * @inheritDoc
      */
+    protected function generateSubmissionPayloadValues(Submission $submission): array
+    {
+        $submissionContent = $submission->getValuesAsJson();
+        $formAttributes = Json::decode(Json::encode($submission->getForm()->getAttributes()));
+
+        $submissionAttributes = $submission->toArray([
+            'id',
+            'formId',
+            'status',
+            'userId',
+            'ipAddress',
+            'isIncomplete',
+            'isSpam',
+            'spamReason',
+            'title',
+            'dateCreated',
+            'dateUpdated',
+            'dateDeleted',
+            'trashed',
+        ]);
+
+        // Trim the form settings a little
+        unset($formAttributes['settings']['integrations']);
+
+        return [
+            'json' => [
+                'submission' => array_merge($submissionAttributes, $submissionContent),
+                'form' => $formAttributes,
+            ],
+        ];
+    }
+    
     private function setCache($values)
     {
         if ($this->cache === null) {
@@ -979,9 +1032,13 @@ abstract class Integration extends SavableComponent implements IntegrationInterf
 
         $this->cache = array_merge($this->cache, $values);
 
+        // Add support for emoji in cached content
+        $data = Json::encode($this->cache);
+        $data = LitEmoji::unicodeToShortcode($data);
+
         // Direct DB update to keep it out of PC, plus speed
         Craft::$app->getDb()->createCommand()
-            ->update('{{%formie_integrations}}', ['cache' => Json::encode($this->cache)], ['id' => $this->id])
+            ->update('{{%formie_integrations}}', ['cache' => $data], ['id' => $this->id])
             ->execute();
     }
 

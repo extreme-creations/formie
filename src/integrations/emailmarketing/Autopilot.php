@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -165,7 +166,7 @@ class Autopilot extends EmailMarketing
                         'name' => Craft::t('formie', 'Unsubscribed'),
                     ]),
                 ], $this->_getCustomFields($fields));
-            
+
                 $settings['lists'][] = new IntegrationCollection([
                     'id' => $list['list_id'],
                     'name' => $list['title'],
@@ -213,7 +214,7 @@ class Autopilot extends EmailMarketing
             $unsubscribed = ArrayHelper::remove($fieldValues, 'unsubscribed');
 
             $payload = [
-                'contact' => [
+                'contact' => array_filter([
                     'Email' => $email,
                     'FirstName' => $firstName,
                     'LastName' => $lastName,
@@ -240,7 +241,7 @@ class Autopilot extends EmailMarketing
                     'unsubscribed' => $unsubscribed,
                     '_autopilot_list' => $this->listId,
                     'custom' => $fieldValues,
-                ],
+                ]),
             ];
 
             $response = $this->deliverPayload($submission, 'contact', $payload);
@@ -301,7 +302,7 @@ class Autopilot extends EmailMarketing
 
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://api2.autopilothq.com/v1/',
-            'headers' => ['autopilotapikey' => Craft::parseEnv($this->apiKey)],
+            'headers' => ['autopilotapikey' => App::parseEnv($this->apiKey)],
         ]);
     }
 
@@ -332,7 +333,7 @@ class Autopilot extends EmailMarketing
         foreach ($fields as $key => $field) {
             // Exclude any names
             if (in_array($field['name'], $excludeNames)) {
-                 continue;
+                continue;
             }
 
             $customFields[] = new IntegrationField([

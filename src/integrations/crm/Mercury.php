@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
@@ -55,6 +56,14 @@ class Mercury extends Crm
     /**
      * @inheritDoc
      */
+    public function getUseUat(): string
+    {
+        return App::parseBooleanEnv($this->useUat);
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function defineRules(): array
     {
         $rules = parent::defineRules();
@@ -62,7 +71,7 @@ class Mercury extends Crm
         $rules[] = [['apiKey', 'apiToken'], 'required'];
 
         // Require URLs for public Volumes.
-        if ($this->useUat) {
+        if ($this->getUseUat()) {
             $rules[] = [['uatKey', 'uatToken'], 'required'];
         }
 
@@ -423,7 +432,6 @@ class Mercury extends Crm
                     }
                 }
             }
-
         } catch (\Throwable $e) {
             Integration::apiError($this, $e);
 
@@ -463,13 +471,13 @@ class Mercury extends Crm
         }
 
         $url = 'https://apis.connective.com.au/mercury/v1';
-        $apiToken = Craft::parseEnv($this->apiToken);
-        $apiKey = Craft::parseEnv($this->apiKey);
+        $apiToken = App::parseEnv($this->apiToken);
+        $apiKey = App::parseEnv($this->apiKey);
 
-        if ($this->useUat) {
+        if ($this->getUseUat()) {
             $url = 'https://uatapis.connective.com.au/mercury-v1';
-            $apiToken = Craft::parseEnv($this->uatToken);
-            $apiKey = Craft::parseEnv($this->uatKey);
+            $apiToken = App::parseEnv($this->uatToken);
+            $apiKey = App::parseEnv($this->uatKey);
         }
 
         return $this->_client = Craft::createGuzzleClient([
@@ -497,7 +505,7 @@ class Mercury extends Crm
                 [
                     'contactMethod' => 'Email 1',
                     'content' => $fields['email'],
-                ]
+                ],
             ]);
         }
 
@@ -508,7 +516,7 @@ class Mercury extends Crm
                 [
                     'contactMethod' => 'Mobile',
                     'content' => $fields['mobile_phone_number'],
-                ]
+                ],
             ]);
         }
 

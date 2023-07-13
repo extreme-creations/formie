@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -63,7 +64,7 @@ class Zengine extends Crm
         $allLists = [];
 
         try {
-            
+
         } catch (\Throwable $e) {
             Integration::apiError($this, $e);
         }
@@ -77,7 +78,7 @@ class Zengine extends Crm
     public function sendPayload(Submission $submission): bool
     {
         try {
-            
+
         } catch (\Throwable $e) {
             Integration::apiError($this, $e);
 
@@ -93,7 +94,7 @@ class Zengine extends Crm
     public function fetchConnection(): bool
     {
         try {
-            
+
         } catch (\Throwable $e) {
             Integration::apiError($this, $e);
 
@@ -114,7 +115,7 @@ class Zengine extends Crm
 
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => '',
-            'headers' => ['Api-Token' => Craft::parseEnv($this->apiKey)],
+            'headers' => ['Api-Token' => App::parseEnv($this->apiKey)],
         ]);
     }
 }

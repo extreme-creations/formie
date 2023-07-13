@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
@@ -132,7 +133,7 @@ class Capsule extends Crm
             // Get Opportunity fields
             $milestoneOptions = [];
             $lostReasonOptions = [];
-            
+
             $milestones = $this->request('GET', 'milestones')['milestones'] ?? [];
             $lostReasons = $this->request('GET', 'lostreasons')['lostReasons'] ?? [];
 
@@ -240,7 +241,7 @@ class Capsule extends Crm
 
             // Get Task fields
             $categoryOptions = [];
-            
+
             $categories = $this->request('GET', 'categories')['categories'] ?? [];
 
             foreach ($categories as $category) {
@@ -452,7 +453,7 @@ class Capsule extends Crm
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://api.capsulecrm.com/api/v2/',
             'headers' => [
-                'Authorization' => 'Bearer ' . Craft::parseEnv($this->apiKey),
+                'Authorization' => 'Bearer ' . App::parseEnv($this->apiKey),
             ],
         ]);
     }
@@ -512,24 +513,30 @@ class Capsule extends Crm
             }
 
             if ($key === 'emailAddresses') {
-                $fields[$key] = [[
-                    'type' => 'Work',
-                    'address' => $value,
-                ]];
+                $fields[$key] = [
+                    [
+                        'type' => 'Work',
+                        'address' => $value,
+                    ],
+                ];
             }
 
             if ($key === 'phoneNumbers') {
-                $fields[$key] = [[
-                    'type' => 'Work',
-                    'number' => $value,
-                ]];
+                $fields[$key] = [
+                    [
+                        'type' => 'Work',
+                        'number' => $value,
+                    ],
+                ];
             }
 
             if ($key === 'websites') {
-                $fields[$key] = [[
-                    'service' => 'URL',
-                    'address' => $value,
-                ]];
+                $fields[$key] = [
+                    [
+                        'service' => 'URL',
+                        'address' => $value,
+                    ],
+                ];
             }
 
             if ($key === 'milestone') {

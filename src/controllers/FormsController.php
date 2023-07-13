@@ -138,7 +138,7 @@ class FormsController extends Controller
 
         // If the user has create permissions, but not edit permissions, we can run into issues...
         if (!$form->uid) {
-             $this->requirePermission('formie-createForms');
+            $this->requirePermission('formie-createForms');
         } else {
             // User must have at least one of these permissions to edit (all, or the specific form)
             $formsPermission = Craft::$app->getUser()->checkPermission('formie-editForms');
@@ -439,14 +439,16 @@ class FormsController extends Controller
         // Add captchas into the payload
         $formHandle = $request->getParam('form');
         $form = Formie::$plugin->getForms()->getFormByHandle($formHandle);
-        $captchas = Formie::$plugin->getIntegrations()->getAllEnabledCaptchasForForm($form);
+        // Force fetch captchas because we're dealing with potential ajax forms
+        // Normally, this function returns only if the `showAllPages` property is set.
+        $captchas = Formie::$plugin->getIntegrations()->getAllEnabledCaptchasForForm($form, null, true);
 
         foreach ($captchas as $captcha) {
             if ($jsVariables = $captcha->getRefreshJsVariables($form)) {
                 $params['captchas'][$captcha->handle] = $jsVariables;
             }
         }
-        
+
         return $this->asJson($params);
     }
 

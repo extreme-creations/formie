@@ -1,9 +1,8 @@
 import { Bouncer } from './utils/bouncer';
 
 export class FormieFormTheme {
-    constructor(config = {}) {
-        this.formId = `#${config.formHashId}`;
-        this.$form = document.querySelector(this.formId);
+    constructor($form, config = {}) {
+        this.$form = $form;
         this.config = config;
         this.settings = config.settings;
         this.validationOnSubmit = !!this.settings.validationOnSubmit;
@@ -107,7 +106,7 @@ export class FormieFormTheme {
         setTimeout(() => {
             this.$form.dispatchEvent(registerFormieValidation);
 
-            this.validator = new Bouncer(this.formId, registerFormieValidation.detail.validatorSettings);
+            this.validator = new Bouncer(this.$form, registerFormieValidation.detail.validatorSettings);
         }, 500);
 
         // After we clear any error, validate the fielset again. Mostly so we can remove global errors
@@ -537,7 +536,12 @@ export class FormieFormTheme {
         // Show server-side errors for each field
         Object.keys(errors).forEach((handle, index) => {
             const [ error ] = errors[handle];
-            const $field = document.querySelector(`[name="fields[${handle}]"]`);
+            let $field = this.$form.querySelector(`[name="fields[${handle}]"]`);
+
+            // Check for multiple fields
+            if (!$field) {
+                $field = this.$form.querySelector(`[name="fields[${handle}][]"]`);
+            }
 
             if ($field) {
                 this.validator.showError($field, { serverMessage: error });
@@ -628,10 +632,7 @@ export class FormieFormTheme {
 
             // Smooth-scroll to the top of the form.
             if (this.settings.scrollToTop) {
-                window.scrollTo({
-                    top: this.$form.getBoundingClientRect().top + window.pageYOffset - 100,
-                    behavior: 'smooth',
-                });
+                this.scrollToForm();
             }
         }
 
@@ -687,14 +688,16 @@ export class FormieFormTheme {
         // Hide all pages
         var $allPages = this.$form.querySelectorAll('.fui-page');
 
-        $allPages.forEach($page => {
-            // Show the current page
-            if ($page.id === `${this.getPageId(data.nextPageId)}`) {
-                $page.classList.remove('fui-hidden');
-            } else {
-                $page.classList.add('fui-hidden');
-            }
-        });
+        if (data.nextPageId) {
+            $allPages.forEach($page => {
+                // Show the current page
+                if ($page.id === `${this.getPageId(data.nextPageId)}`) {
+                    $page.classList.remove('fui-hidden');
+                } else {
+                    $page.classList.add('fui-hidden');
+                }
+            });
+        }
 
         // Update tabs and progress bar if we're using them
         var $progress = this.$form.querySelector('.fui-progress-bar');
@@ -724,20 +727,29 @@ export class FormieFormTheme {
 
         // Smooth-scroll to the top of the form.
         if (this.settings.scrollToTop) {
-            window.scrollTo({
-                top: this.$form.getBoundingClientRect().top + window.pageYOffset - 100,
-                behavior: 'smooth',
-            });
+            this.scrollToForm();
         }
     }
 
     setCurrentPage(pageId) {
         this.settings.currentPageId = pageId;
-        this.$currentPage = document.querySelector(`#${this.getPageId(pageId)}`);
+        this.$currentPage = this.$form.querySelector(`#${this.getPageId(pageId)}`);
     }
 
     getPageId(pageId) {
         return `${this.config.formHashId}-p-${pageId}`;
+    }
+
+    scrollToForm() {
+        // Check for scroll-padding-top or `scroll-margin-top`
+        const extraPadding = (document.documentElement.style['scroll-padding-top'] || '0px').replace('px', '');
+        const extraMargin = (document.documentElement.style['scroll-margin-top'] || '0px').replace('px', '');
+        
+        // Because the form can be hidden, use the parent wrapper
+        window.scrollTo({
+            top: this.$form.parentNode.getBoundingClientRect().top + window.pageYOffset - 100 - extraPadding - extraMargin,
+            behavior: 'smooth',
+        });
     }
 
     triggerJsEvents() {

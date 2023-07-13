@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
@@ -287,7 +288,7 @@ class Mailchimp extends EmailMarketing
 
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://' . $dataCenter . '.api.mailchimp.com/3.0/',
-            'auth' => ['apikey', Craft::parseEnv($this->apiKey)],
+            'auth' => ['apikey', App::parseEnv($this->apiKey)],
         ]);
     }
 
@@ -300,7 +301,7 @@ class Mailchimp extends EmailMarketing
      */
     private function _getDataCenter()
     {
-        if (preg_match('/([a-zA-Z]+[\d]+)$/', Craft::parseEnv($this->apiKey), $matches)) {
+        if (preg_match('/([a-zA-Z]+[\d]+)$/', App::parseEnv($this->apiKey), $matches)) {
             return $matches[1] ?? '';
         }
     }
@@ -342,12 +343,12 @@ class Mailchimp extends EmailMarketing
         foreach ($fields as $key => $field) {
             // // Only allow supported types
             if (!in_array($field['type'], $supportedFields)) {
-                 continue;
+                continue;
             }
 
             // Exclude any names
             if (in_array($field['name'], $excludeNames)) {
-                 continue;
+                continue;
             }
 
             $customFields[] = new IntegrationField([

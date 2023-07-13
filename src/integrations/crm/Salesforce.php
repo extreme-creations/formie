@@ -13,6 +13,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\DateTimeHelper;
 use craft\helpers\Json;
@@ -63,7 +64,7 @@ class Salesforce extends Crm
      */
     public function getAuthorizeUrl(): string
     {
-        $prefix = $this->useSandbox ? 'test' : 'login';
+        $prefix = $this->getUseSandbox() ? 'test' : 'login';
 
         return "https://{$prefix}.salesforce.com/services/oauth2/authorize";
     }
@@ -73,7 +74,7 @@ class Salesforce extends Crm
      */
     public function getAccessTokenUrl(): string
     {
-        $prefix = $this->useSandbox ? 'test' : 'login';
+        $prefix = $this->getUseSandbox() ? 'test' : 'login';
 
         return "https://{$prefix}.salesforce.com/services/oauth2/token";
     }
@@ -83,7 +84,7 @@ class Salesforce extends Crm
      */
     public function getClientId(): string
     {
-        return Craft::parseEnv($this->clientId);
+        return App::parseEnv($this->clientId);
     }
 
     /**
@@ -91,7 +92,23 @@ class Salesforce extends Crm
      */
     public function getClientSecret(): string
     {
-        return Craft::parseEnv($this->clientSecret);
+        return App::parseEnv($this->clientSecret);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getUseSandbox(): string
+    {
+        return App::parseBooleanEnv($this->useSandbox);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getUseCredentials(): string
+    {
+        return App::parseBooleanEnv($this->useCredentials);
     }
 
     /**
@@ -100,7 +117,7 @@ class Salesforce extends Crm
     public function oauthCallback()
     {
         // In some instances (service users) we might want to use the insecure password grant
-        if ($this->useCredentials) {
+        if ($this->getUseCredentials()) {
             $provider = $this->getOauthProvider();
 
             $this->beforeFetchAccessToken($provider);
@@ -109,8 +126,8 @@ class Salesforce extends Crm
             $token = $provider->getAccessToken('password', [
                 'client_id' => $this->getClientId(),
                 'client_secret' => $this->getClientSecret(),
-                'username' => Craft::parseEnv($this->username),
-                'password' => Craft::parseEnv($this->password),
+                'username' => App::parseEnv($this->username),
+                'password' => App::parseEnv($this->password),
             ]);
 
             $this->afterFetchAccessToken($token);
@@ -303,9 +320,11 @@ class Salesforce extends Crm
                 $contactPayload = $this->_prepPayload($contactValues);
 
                 // Doesn't support upsert, so try to find the record first
-                $response = $this->request('GET', 'query', [
-                    'query' => ['q' => "SELECT ID,OwnerId FROM Contact WHERE Email = '{$contactPayload['Email']}' LIMIT 1"],
-                ]);
+                if (isset($contactPayload['Email'])) {
+                    $response = $this->request('GET', 'query', [
+                        'query' => ['q' => "SELECT ID,OwnerId FROM Contact WHERE Email = '{$contactPayload['Email']}' LIMIT 1"],
+                    ]);
+                }
 
                 $contactId = $response['records'][0]['Id'] ?? '';
                 $contactOwnerId = $response['records'][0]['OwnerId'] ?? '';
@@ -383,6 +402,7 @@ class Salesforce extends Crm
                     }
                 } catch (\Throwable $e) {
                     // Ignore duplicate warnings and continue, but still log
+                    Integration::error($this, 'Duplicate lead found.', false);
                     Integration::apiError($this, $e, false);
 
                     // Check if we should enable tasks to be created for duplicates
@@ -390,6 +410,8 @@ class Salesforce extends Crm
                     $responseCode = $response[0]['errorCode'] ?? '';
 
                     if ($responseCode === 'DUPLICATES_DETECTED' && $this->duplicateLeadTask) {
+                        Integration::error($this, 'Attempting to create task for duplicate lead.', false);
+
                         $taskPayload = [
                             'Subject' => $this->duplicateLeadTaskSubject,
                             'WhoId' => $contactId,
@@ -406,8 +428,15 @@ class Salesforce extends Crm
                             if ($response === false) {
                                 return true;
                             }
+
+                            Integration::log($this, Craft::t('formie', 'Response from task-creation {response}. Sent payload {payload}', [
+                                'response' => Json::encode($response),
+                                'payload' => Json::encode($taskPayload),
+                            ]));
                         } catch (\Throwable $e) {
-                            Integration::apiError($this, $e, false);
+                            Integration::apiError($this, $e);
+
+                            return false;
                         }
                     }
                 }
@@ -561,12 +590,12 @@ class Salesforce extends Crm
 
             // Only allow supported types
             if (!in_array($field['type'], $supportedFields)) {
-                 continue;
+                continue;
             }
 
             // Exclude any names
             if (in_array($field['name'], $excludeNames)) {
-                 continue;
+                continue;
             }
 
             $options = [];

@@ -15,14 +15,15 @@ class IntegrationField extends Model
     const TYPE_BOOLEAN = 'boolean';
     const TYPE_DATE = 'date';
     const TYPE_DATETIME = 'datetime';
+    const TYPE_DATECLASS = 'dateclass';
     const TYPE_ARRAY = 'array';
 
 
     // Properties
     // =========================================================================
 
-    public $handle;
     public $name;
+    public $handle;
     public $type;
     public $required;
     public $options = [];
@@ -39,5 +40,4 @@ class IntegrationField extends Model
 
         return self::TYPE_STRING;
     }
-
 }

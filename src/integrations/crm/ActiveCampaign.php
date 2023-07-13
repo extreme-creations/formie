@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -90,14 +91,7 @@ class ActiveCampaign extends Crm
 
         // Populate some options for some values
         try {
-            $response = $this->request('GET', 'dealGroups', [
-                'query' => [
-                    'limit' => 100,
-                ],
-            ]);
-
-            $dealGroups = $response['dealGroups'] ?? [];
-            $dealStages = $response['dealStages'] ?? [];
+            $dealGroups = $this->_getPaginated('dealGroups');
 
             foreach ($dealGroups as $dealGroup) {
                 $dealGroupOptions[] = [
@@ -105,6 +99,8 @@ class ActiveCampaign extends Crm
                     'value' => $dealGroup['id'],
                 ];
             }
+
+            $dealStages = $this->_getPaginated('dealStages');
 
             foreach ($dealStages as $dealStage) {
                 $dealStageOptions[] = [
@@ -123,13 +119,7 @@ class ActiveCampaign extends Crm
             }
 
             // Get Contacts fields
-            $response = $this->request('GET', 'fields', [
-                'query' => [
-                    'limit' => 100,
-                ],
-            ]);
-
-            $fields = $response['fields'] ?? [];
+            $fields = $this->_getPaginated('fields');
 
             $contactFields = array_merge([
                 new IntegrationField([
@@ -159,14 +149,13 @@ class ActiveCampaign extends Crm
                 ]),
             ], $this->_getCustomFields($fields));
 
-            // Get Deals fields
-            $response = $this->request('GET', 'dealCustomFieldMeta', [
-                'query' => [
-                    'limit' => 100,
-                ],
+            $contactFields[] = new IntegrationField([
+                'handle' => 'tags',
+                'name' => Craft::t('formie', 'Tags'),
             ]);
 
-            $fields = $response['dealCustomFieldMeta'] ?? [];
+            // Get Deals fields
+            $fields = $this->_getPaginated('dealCustomFieldMeta');
 
             $dealFields = array_merge([
                 new IntegrationField([
@@ -239,13 +228,7 @@ class ActiveCampaign extends Crm
             ], $this->_getCustomFields($fields));
 
             // Get Account fields
-            $response = $this->request('GET', 'accountCustomFieldMeta', [
-                'query' => [
-                    'limit' => 100,
-                ],
-            ]);
-
-            $fields = $response['accountCustomFieldMeta'] ?? [];
+            $fields = $this->_getPaginated('accountCustomFieldMeta');
 
             $accountFields = array_merge([
                 new IntegrationField([
@@ -286,6 +269,7 @@ class ActiveCampaign extends Crm
                 $lastName = ArrayHelper::remove($contactValues, 'lastName');
                 $phone = ArrayHelper::remove($contactValues, 'phone');
                 $listId = ArrayHelper::remove($contactValues, 'listId');
+                $tags = ArrayHelper::remove($contactValues, 'tags');
 
                 $contactPayload = [
                     'contact' => array_filter([
@@ -328,6 +312,59 @@ class ActiveCampaign extends Crm
 
                     if ($response === false) {
                         return true;
+                    }
+                }
+
+                // Process any tags, we need to find or create each one.
+                if ($tags) {
+                    // Cleanup and handle multiple tags
+                    $tags = array_filter(array_map('trim', explode(',', $tags)));
+
+                    if ($tags) {
+                        // Find all the tags first
+                        $existingTags = $this->_getPaginated('tags');
+                        $tagIds = [];
+
+                        // Process each tag
+                        foreach ($tags as $tag) {
+                            // Find if it's already been created, don't create again
+                            foreach ($existingTags as $existingTag) {
+                                if ($existingTag['tag'] === $tag) {
+                                    $tagIds[] = $existingTag['id'];
+
+                                    continue 2;
+                                }
+                            }
+
+                            // Create the tag
+                            $tagPayload = [
+                                'tag' => [
+                                    'tag' => $tag,
+                                    'tagType' => 'contact',
+                                    'description' => '',
+                                ],
+                            ];
+
+                            $response = $this->deliverPayload($submission, 'tags', $tagPayload);
+
+                            $tagIds[] = $response['tag']['id'] ?? null;
+                        }
+
+                        // Assign all tags to the contact
+                        foreach ($tagIds as $tagId) {
+                            $tagPayload = [
+                                'contactTag' => [
+                                    'contact' => $contactId,
+                                    'tag' => $tagId,
+                                ],
+                            ];
+
+                            $response = $this->deliverPayload($submission, 'contactTags', $tagPayload);
+
+                            if ($response === false) {
+                                return true;
+                            }
+                        }
                     }
                 }
             }
@@ -458,8 +495,8 @@ class ActiveCampaign extends Crm
         }
 
         return $this->_client = Craft::createGuzzleClient([
-            'base_uri' => trim(Craft::parseEnv($this->apiUrl), '/') . '/api/3/',
-            'headers' => ['Api-Token' => Craft::parseEnv($this->apiKey)],
+            'base_uri' => trim(App::parseEnv($this->apiUrl), '/') . '/api/3/',
+            'headers' => ['Api-Token' => App::parseEnv($this->apiKey)],
         ]);
     }
 
@@ -507,12 +544,12 @@ class ActiveCampaign extends Crm
 
             // // Only allow supported types
             if (!in_array($fieldType, $supportedFields)) {
-                 continue;
+                continue;
             }
 
             // Exclude any names
             if (in_array($fieldName, $excludeNames)) {
-                 continue;
+                continue;
             }
 
             $customFields[] = new IntegrationField([
@@ -572,7 +609,7 @@ class ActiveCampaign extends Crm
             'query' => [
                 'limit' => $limit,
                 'offset' => $offset,
-            ]
+            ],
         ]);
 
         $newItems = $response[$endpoint] ?? [];

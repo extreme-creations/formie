@@ -42,7 +42,10 @@ class HandleHelper
         // The max length for the database engine, `field_`, and the suffix for fields (10 chars extra to be safe)
         $maxHandleLength = Craft::$app->getDb()->getSchema()->maxObjectNameLength;
         $maxHandleLength -= strlen(Craft::$app->getContent()->fieldColumnPrefix);
-        $maxHandleLength -= 10;
+        $maxHandleLength -= 8;
+
+        // MySQL 8 struggles with 53+ column names https://github.com/verbb/formie/issues/1219
+        $maxHandleLength -= 12;
 
         return $maxHandleLength;
     }

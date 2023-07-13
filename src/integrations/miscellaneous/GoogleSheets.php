@@ -11,6 +11,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -70,7 +71,7 @@ class GoogleSheets extends Miscellaneous
      */
     public function getClientId(): string
     {
-        return Craft::parseEnv($this->clientId);
+        return App::parseEnv($this->clientId);
     }
 
     /**
@@ -78,7 +79,15 @@ class GoogleSheets extends Miscellaneous
      */
     public function getClientSecret(): string
     {
-        return Craft::parseEnv($this->clientSecret);
+        return App::parseEnv($this->clientSecret);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getProxyRedirect(): ?bool
+    {
+        return App::parseBooleanEnv($this->proxyRedirect);
     }
 
     /**
@@ -100,7 +109,7 @@ class GoogleSheets extends Miscellaneous
         $uri = parent::getRedirectUri();
 
         // Allow a proxy to our server to forward on the request - just for local dev ease
-        if ($this->proxyRedirect) {
+        if ($this->getProxyRedirect()) {
             return "https://formie.verbb.io?return=$uri";
         }
 
@@ -125,26 +134,11 @@ class GoogleSheets extends Miscellaneous
     {
         return new GoogleProvider($this->getOauthProviderConfig());
     }
-    
+
 
     // Public Methods
     // =========================================================================
 
-    /**
-     * @inheritDoc
-     */
-    public function init()
-    {
-        // Allow an .env var to override the proxy state. Due to it being a lightswitch
-        // we can't set an override any other way.
-        $proxyRedirect = Craft::parseEnv('$FORMIE_INTEGRATION_PROXY_REDIRECT');
-
-        if (!is_null($proxyRedirect)) {
-            $this->proxyRedirect = $proxyRedirect;
-        }
-
-        return parent::init();
-    }
 
     /**
      * @inheritDoc
@@ -282,7 +276,11 @@ class GoogleSheets extends Miscellaneous
 
         $token = $this->getToken();
 
-        $spreadsheetId = Craft::parseEnv($this->spreadsheetId);
+        if (!$token) {
+            Integration::apiError($this, 'Token not found for integration.', true);
+        }
+
+        $spreadsheetId = App::parseEnv($this->spreadsheetId);
 
         $this->_client = Craft::createGuzzleClient([
             'base_uri' => "https://sheets.googleapis.com/v4/spreadsheets/{$spreadsheetId}/",

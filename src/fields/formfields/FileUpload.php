@@ -213,8 +213,8 @@ class FileUpload extends CraftAssets implements FormFieldInterface
 
         // Get any uploaded filenames
         $uploadedFiles = $this->_getUploadedFiles($element);
-        
-        $sizeMinLimit = $this->sizeMinLimit * 1000000;
+
+        $sizeMinLimit = $this->sizeMinLimit * 1024 * 1024;
 
         foreach ($uploadedFiles as $file) {
             if (file_exists($file['location']) && (filesize($file['location']) < $sizeMinLimit)) {
@@ -240,8 +240,8 @@ class FileUpload extends CraftAssets implements FormFieldInterface
 
         // Get any uploaded filenames
         $uploadedFiles = $this->_getUploadedFiles($element);
-        
-        $sizeLimit = $this->sizeLimit * 1000000;
+
+        $sizeLimit = $this->sizeLimit * 1024 * 1024;
 
         foreach ($uploadedFiles as $file) {
             if (file_exists($file['location']) && (filesize($file['location']) > $sizeLimit)) {
@@ -281,11 +281,15 @@ class FileUpload extends CraftAssets implements FormFieldInterface
         $extensions = [];
         $allKinds = Assets::getAllowedFileKinds();
 
+        $allowedFileExtensions = Craft::$app->getConfig()->getGeneral()->allowedFileExtensions;
+
         foreach ($this->allowedKinds as $allowedKind) {
             $kind = $allKinds[$allowedKind];
 
             foreach ($kind['extensions'] as $extension) {
-                $extensions[] = ".$extension";
+                if (in_array($extension, $allowedFileExtensions)) {
+                    $extensions[] = ".$extension";
+                }
             }
         }
 
@@ -335,7 +339,7 @@ class FileUpload extends CraftAssets implements FormFieldInterface
                 'children' => [
                     [
                         'component' => 'div',
-                        'class' => 'flex',
+                        'class' => 'flex flex-nowrap',
                         'children' => [
                             SchemaHelper::selectField([
                                 'name' => 'uploadLocationSource',
@@ -343,7 +347,8 @@ class FileUpload extends CraftAssets implements FormFieldInterface
                             ]),
                             SchemaHelper::textField([
                                 'name' => 'uploadLocationSubpath',
-                                'class' => 'text flex-grow',
+                                'class' => 'text flex-grow fullwidth',
+                                'outerClass' => 'flex-grow',
                                 'placeholder' => 'path/to/subfolder',
                             ]),
                         ],
@@ -483,6 +488,20 @@ class FileUpload extends CraftAssets implements FormFieldInterface
             $this->_assetsToDelete = $value->ids();
         }
 
+        // Check if there are any invalid assets, likely done by bots. This is where the POST
+        // data has come in as ['JrFVNoLBCicUTAOn'] instead of a empty value (for new assets) or an ID.
+        // This is only usually done by malicious actors manipulating POST data.
+        // Note that this is set on the AssetQuery itself.
+        $assetIds = $element->getFieldValue($this->handle)->id ?? false;
+
+        if ($assetIds && is_array($assetIds)) {
+            foreach ($assetIds as $assetId) {
+                if (!(int)$assetId) {
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 
@@ -605,7 +624,7 @@ class FileUpload extends CraftAssets implements FormFieldInterface
 
         if ($sourceKey && is_string($sourceKey) && strpos($sourceKey, 'folder:') === 0) {
             $parts = explode(':', $sourceKey);
-            
+
             return Craft::$app->getVolumes()->getVolumeByUid($parts[1]);
         }
 
@@ -617,8 +636,9 @@ class FileUpload extends CraftAssets implements FormFieldInterface
      */
     private function humanFilesize($size, $precision = 2)
     {
-        for ($i = 0; ($size / 1024) > 0.9; $i++, $size /= 1024) {}
-        return round($size, $precision).['B','kB','MB','GB','TB','PB','EB','ZB','YB'][$i];
+        for ($i = 0; ($size / 1024) > 0.9; $i++, $size /= 1024) {
+        }
+        return round($size, $precision) . ['B', 'kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'][$i];
     }
 
     /**

@@ -28,7 +28,7 @@ class Entry extends Element
 
     public $entryTypeId;
     public $defaultAuthorId;
-    public $createDraft;
+    public $createDraft = false;
 
 
     // Public Methods
@@ -136,12 +136,12 @@ class Entry extends Element
             new IntegrationField([
                 'name' => Craft::t('app', 'Post Date'),
                 'handle' => 'postDate',
-                'type' => IntegrationField::TYPE_DATETIME,
+                'type' => IntegrationField::TYPE_DATECLASS,
             ]),
             new IntegrationField([
                 'name' => Craft::t('app', 'Expiry Date'),
                 'handle' => 'expiryDate',
-                'type' => IntegrationField::TYPE_DATETIME,
+                'type' => IntegrationField::TYPE_DATECLASS,
             ]),
             new IntegrationField([
                 'name' => Craft::t('app', 'Enabled'),
@@ -151,12 +151,12 @@ class Entry extends Element
             new IntegrationField([
                 'name' => Craft::t('app', 'Date Created'),
                 'handle' => 'dateCreated',
-                'type' => IntegrationField::TYPE_DATETIME,
+                'type' => IntegrationField::TYPE_DATECLASS,
             ]),
             new IntegrationField([
                 'name' => Craft::t('app', 'Date Updated'),
                 'handle' => 'dateUpdated',
-                'type' => IntegrationField::TYPE_DATETIME,
+                'type' => IntegrationField::TYPE_DATECLASS,
             ]),
         ];
     }
@@ -217,7 +217,7 @@ class Entry extends Element
     {
         if (!$this->entryTypeId) {
             Integration::error($this, Craft::t('formie', 'Unable to save element integration. No `entryTypeId`.'), true);
-            
+
             return false;
         }
 
@@ -230,9 +230,11 @@ class Entry extends Element
             $entry->sectionId = $entryType->sectionId;
 
             $attributeValues = $this->getFieldMappingValues($submission, $this->attributeMapping, $this->getElementAttributes());
-            
+
             // Filter null values
-            $attributeValues = $this->filterNullValues($attributeValues);
+            if (!$this->overwriteValues) {
+                $attributeValues = $this->filterNullValues($attributeValues);
+            }
 
             foreach ($attributeValues as $entryFieldHandle => $fieldValue) {
                 if ($entryFieldHandle === 'author') {
@@ -246,9 +248,11 @@ class Entry extends Element
 
             $fields = $this->_getEntryTypeSettings()->fields ?? [];
             $fieldValues = $this->getFieldMappingValues($submission, $this->fieldMapping, $fields);
-            
+
             // Filter null values
-            $fieldValues = $this->filterNullValues($fieldValues);
+            if (!$this->overwriteValues) {
+                $fieldValues = $this->filterNullValues($fieldValues);
+            }
 
             $entry->setFieldValues($fieldValues);
             $entry->updateTitle();
@@ -269,18 +273,22 @@ class Entry extends Element
                 // Is this a brand-new entry?
                 if (!$entry->id) {
                     $entry->setScenario(CraftElement::SCENARIO_ESSENTIALS);
-                    
+
                     if (!Craft::$app->getDrafts()->saveElementAsDraft($entry, $authorId)) {
                         Integration::error($this, Craft::t('formie', 'Unable to save “{type}” draft element integration. Error: {error}.', [
                             'type' => $this->handle,
                             'error' => Json::encode($entry->getErrors()),
                         ]), true);
-                        
+
                         return false;
                     }
+
+                    $this->afterSendPayload($submission, '', $entry, '', []);
                 } else {
                     // Otherwise, create a new draft on the entry
-                    Craft::$app->getDrafts()->createDraft($entry, $authorId);
+                    $draft = Craft::$app->getDrafts()->createDraft($entry, $authorId);
+
+                    $this->afterSendPayload($submission, '', $entry, '', ['draft' => $draft]);
                 }
 
                 return true;
@@ -300,7 +308,7 @@ class Entry extends Element
                     'type' => $this->handle,
                     'error' => Json::encode($entry->getErrors()),
                 ]), true);
-                
+
                 return false;
             }
 

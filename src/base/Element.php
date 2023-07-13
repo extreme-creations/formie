@@ -4,7 +4,12 @@ namespace verbb\formie\base;
 use verbb\formie\Formie;
 use verbb\formie\elements\Form;
 use verbb\formie\elements\Submission;
+use verbb\formie\events\ModifyFieldIntegrationValueEvent;
+use verbb\formie\fields\formfields\MultiLineText;
+use verbb\formie\fields\formfields\SingleLineText;
+use verbb\formie\fields\formfields\Table;
 use verbb\formie\models\IntegrationField;
+use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
 use craft\fields;
@@ -13,7 +18,11 @@ use craft\helpers\Html;
 use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 
+use yii\base\Event;
 use yii\helpers\Markdown;
+
+use DateTime;
+use DateTimeZone;
 
 abstract class Element extends Integration implements IntegrationInterface
 {
@@ -24,6 +33,7 @@ abstract class Element extends Integration implements IntegrationInterface
     public $fieldMapping;
     public $updateElement = false;
     public $updateElementMapping;
+    public $overwriteValues = false;
 
 
     // Static Methods
@@ -49,6 +59,45 @@ abstract class Element extends Integration implements IntegrationInterface
     // Public Methods
     // =========================================================================
 
+    public function init(): void
+    {
+        parent::init();
+
+        Event::on(self::class, self::EVENT_MODIFY_FIELD_MAPPING_VALUE, function(ModifyFieldIntegrationValueEvent $event) {
+            // For rich-text enabled fields, retain the HTML (safely)
+            if ($event->field instanceof MultiLineText || $event->field instanceof SingleLineText) {
+                $event->value = StringHelper::htmlDecode($event->value, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401);
+            }
+
+            // For Date fields as a destination, convert to UTC from system time
+            if ($event->integrationField->getType() === IntegrationField::TYPE_DATECLASS) {
+                if ($event->value instanceof DateTime) {
+                    $timezone = new DateTimeZone(Craft::$app->getTimeZone());
+
+                    $event->value = DateTime::createFromFormat('Y-m-d H:i:s', $event->value->format('Y-m-d H:i:s'), $timezone);
+                }
+            }
+
+            // Element fields should map 1-for-1
+            if ($event->field instanceof fields\BaseRelationField) {
+                $event->value = $event->submission->getFieldValue($event->field->handle)->ids();
+            }
+
+            // For Table fields with Date/Time destination columns, convert to UTC from system time
+            if ($event->field instanceof Table) {
+                $timezone = new DateTimeZone(Craft::$app->getTimeZone());
+
+                foreach ($event->value as $rowKey => $row) {
+                    foreach ($row as $colKey => $column) {
+                        if (is_array($column) && isset($column['date'])) {
+                            $event->value[$rowKey][$colKey] = (new DateTime($column['date'], $timezone));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     /**
      * @inheritDoc
      */
@@ -65,14 +114,6 @@ abstract class Element extends Integration implements IntegrationInterface
     public function getSettingsHtml(): string
     {
         $handle = StringHelper::toKebabCase($this->displayName());
-
-        // Don't display anything if we can't edit anything
-        if (!Craft::$app->getConfig()->getGeneral()->allowAdminChanges) {
-            $text = Craft::t('formie', 'Integration settings can only be editable on an environment with `allowAdminChanges` enabled.');
-            $text = Markdown::processParagraph($text);
-
-            return Html::tag('span', $text, ['class' => 'warning with-icon']);
-        }
 
         return Craft::$app->getView()->renderTemplate("formie/integrations/elements/{$handle}/_plugin-settings", [
             'integration' => $this,
@@ -123,7 +164,7 @@ abstract class Element extends Integration implements IntegrationInterface
             fields\Assets::class => IntegrationField::TYPE_ARRAY,
             fields\Categories::class => IntegrationField::TYPE_ARRAY,
             fields\Checkboxes::class => IntegrationField::TYPE_ARRAY,
-            fields\Date::class => IntegrationField::TYPE_DATETIME,
+            fields\Date::class => IntegrationField::TYPE_DATECLASS,
             fields\Entries::class => IntegrationField::TYPE_ARRAY,
             fields\Lightswitch::class => IntegrationField::TYPE_BOOLEAN,
             fields\MultiSelect::class => IntegrationField::TYPE_ARRAY,
@@ -184,6 +225,9 @@ abstract class Element extends Integration implements IntegrationInterface
 
         if ($updateElementValues) {
             $query = $elementType::find($updateElementValues);
+
+            // Fina elements of any status, like disabled
+            $query->status(null);
 
             Craft::configure($query, $updateElementValues);
 

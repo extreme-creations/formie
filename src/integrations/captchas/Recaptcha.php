@@ -6,6 +6,7 @@ use verbb\formie\elements\Form;
 use verbb\formie\elements\Submission;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -110,7 +111,7 @@ class Recaptcha extends Captcha
     public function getFrontEndJsVariables(Form $form, $page = null)
     {
         $settings = [
-            'siteKey' => Craft::parseEnv($this->siteKey),
+            'siteKey' => App::parseEnv($this->siteKey),
             'formId' => $form->getFormId(),
             'theme' => $this->theme,
             'size' => $this->size,
@@ -176,9 +177,9 @@ class Recaptcha extends Captcha
         }
 
         $client = Craft::createGuzzleClient();
-        $siteKey = Craft::parseEnv($this->siteKey);
-        $secretKey = Craft::parseEnv($this->secretKey);
-        $projectId = Craft::parseEnv($this->projectId);
+        $siteKey = App::parseEnv($this->siteKey);
+        $secretKey = App::parseEnv($this->secretKey);
+        $projectId = App::parseEnv($this->projectId);
 
         if ($this->type === self::RECAPTCHA_TYPE_ENTERPRISE) {
             $response = $client->post('https://recaptchaenterprise.googleapis.com/v1beta1/projects/' . $projectId . '/assessments?key=' . $secretKey, [
@@ -209,19 +210,19 @@ class Recaptcha extends Captcha
             'form_params' => [
                 'secret' => $secretKey,
                 'response' => $response,
-                'remoteip' => Craft::$app->request->getRemoteIP(),
+                'remoteip' => Craft::$app->getRequest()->getRemoteIP(),
             ],
         ]);
 
         $result = Json::decode((string)$response->getBody(), true);
         $success = $result['success'] ?? false;
 
-        if (!$success) {
-            $this->spamReason = Json::encode($result);
+        if ($success && isset($result['score'])) {
+            $success = (bool)($result['score'] >= $this->minScore);
         }
 
-        if (isset($result['score'])) {
-            return ($result['score'] >= $this->minScore);
+        if (!$success) {
+            $this->spamReason = Json::encode($result);
         }
 
         return $success;
@@ -237,6 +238,18 @@ class Recaptcha extends Captcha
         }
 
         return false;
+    }
+
+    public function allowedGqlSettings(): array
+    {
+        return [
+            'siteKey' => $this->siteKey,
+            'type' => $this->type,
+            'size' => $this->size,
+            'theme' => $this->theme,
+            'badge' => $this->badge,
+            'language' => $this->language,
+        ];
     }
 
 

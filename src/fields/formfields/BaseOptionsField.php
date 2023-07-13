@@ -13,6 +13,8 @@ use craft\fields\data\OptionData;
 use craft\fields\data\SingleOptionFieldData;
 use craft\helpers\Json;
 
+use yii\db\Schema;
+
 abstract class BaseOptionsField extends CraftBaseOptionsField
 {
     // Traits
@@ -57,13 +59,25 @@ abstract class BaseOptionsField extends CraftBaseOptionsField
     /**
      * @inheritDoc
      */
+    public function getContentColumnType(): string
+    {
+        if (Formie::$plugin->getSettings()->enableLargeFieldStorage) {
+            return Schema::TYPE_TEXT;
+        }
+        
+        return parent::getContentColumnType();
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function getValue(ElementInterface $element)
     {
         $value = $element->getFieldValue($this->handle);
 
         if ($value instanceof SingleOptionFieldData) {
             return $value->value;
-        } elseif ($value instanceof MultiOptionsFieldData) {
+        } else if ($value instanceof MultiOptionsFieldData) {
             $values = [];
             foreach ($value as $selectedValue) {
                 /** @var OptionData $selectedValue */
@@ -256,7 +270,7 @@ abstract class BaseOptionsField extends CraftBaseOptionsField
 
         return $value->label ?? '';
     }
-    
+
     /**
      * @inheritDoc
      */

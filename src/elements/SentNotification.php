@@ -19,6 +19,8 @@ use craft\helpers\StringHelper;
 use craft\helpers\Template;
 use craft\helpers\UrlHelper;
 
+use LitEmoji\LitEmoji;
+
 class SentNotification extends Element
 {
     // Constants
@@ -88,8 +90,8 @@ class SentNotification extends Element
                 'key' => '*',
                 'label' => Craft::t('formie', 'All forms'),
                 'criteria' => ['formId' => $ids],
-                'defaultSort' => ['elements.dateCreated', 'desc']
-            ]
+                'defaultSort' => ['elements.dateCreated', 'desc'],
+            ],
         ];
 
         $sources[] = ['heading' => Craft::t('formie', 'Forms')];
@@ -113,7 +115,7 @@ class SentNotification extends Element
                     'handle' => $form->handle,
                 ],
                 'criteria' => ['formId' => $form->id],
-                'defaultSort' => ['elements.dateCreated', 'desc']
+                'defaultSort' => ['elements.dateCreated', 'desc'],
             ];
         }
 
@@ -300,6 +302,10 @@ class SentNotification extends Element
         $record->dateCreated = $this->dateCreated;
         $record->dateUpdated = $this->dateUpdated;
 
+        // Ensure we take care of any emoji's in content
+        $record->body = LitEmoji::encodeHtml($record->body);
+        $record->htmlBody = LitEmoji::encodeHtml($record->htmlBody);
+
         $record->save(false);
 
         parent::afterSave($isNew);
@@ -390,7 +396,7 @@ class SentNotification extends Element
             [
                 'label' => Craft::t('formie', 'Date Sent'),
                 'orderBy' => 'elements.dateCreated',
-                'attribute' => 'dateCreated'
+                'attribute' => 'dateCreated',
             ],
         ];
     }

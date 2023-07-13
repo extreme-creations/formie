@@ -217,9 +217,11 @@ class User extends Element
             }
 
             $attributeValues = $this->getFieldMappingValues($submission, $this->attributeMapping, $this->getElementAttributes());
-            
+
             // Filter null values
-            $attributeValues = $this->filterNullValues($attributeValues);
+            if (!$this->overwriteValues) {
+                $attributeValues = $this->filterNullValues($attributeValues);
+            }
 
             // Check if the password was mapped, as if the source field was a Password field.
             // The value will already be hashed and we need to do a manual DB-level update
@@ -235,9 +237,11 @@ class User extends Element
 
             $fields = $this->getFormSettingValue('elements')[0]->fields ?? [];
             $fieldValues = $this->getFieldMappingValues($submission, $this->fieldMapping, $fields);
-            
+
             // Filter null values
-            $fieldValues = $this->filterNullValues($fieldValues);
+            if (!$this->overwriteValues) {
+                $fieldValues = $this->filterNullValues($fieldValues);
+            }
 
             $user->setFieldValues($fieldValues);
 
@@ -264,7 +268,7 @@ class User extends Element
                     'type' => $this->handle,
                     'error' => Json::encode($user->getErrors()),
                 ]), true);
-                
+
                 return false;
             }
 
@@ -301,13 +305,13 @@ class User extends Element
             // store the password content against the submission.
             if ($passwordField) {
                 $submission->setFieldValue($passwordField->handle, '');
-            
+
                 if (!Craft::$app->getElements()->saveElement($submission, false)) {
                     Integration::error($this, Craft::t('formie', 'Unable to save “{type}” element integration. Error: {error}.', [
                         'type' => $this->handle,
                         'error' => Json::encode($submission->getErrors()),
                     ]), true);
-                    
+
                     return false;
                 }
             }
@@ -356,7 +360,7 @@ class User extends Element
 
         return $userGroups;
     }
-    
+
 
     // Private Methods
     // =========================================================================

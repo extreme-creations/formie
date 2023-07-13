@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -245,8 +246,8 @@ class IContact extends EmailMarketing
             return $this->_client;
         }
 
-        $accountId = Craft::parseEnv($this->accountId);
-        $clientFolderId = Craft::parseEnv($this->clientFolderId);
+        $accountId = App::parseEnv($this->accountId);
+        $clientFolderId = App::parseEnv($this->clientFolderId);
 
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => "https://app.icontact.com/icp/a/{$accountId}/c/{$clientFolderId}/",
@@ -254,9 +255,9 @@ class IContact extends EmailMarketing
                 'Accept' => 'application/json',
                 'Content-type' => 'application/json',
                 'Api-Version' => '2.2',
-                'API-AppId' => Craft::parseEnv($this->appId),
-                'API-Username' => Craft::parseEnv($this->username),
-                'API-Password' => Craft::parseEnv($this->password),
+                'API-AppId' => App::parseEnv($this->appId),
+                'API-Username' => App::parseEnv($this->username),
+                'API-Password' => App::parseEnv($this->password),
             ],
         ]);
     }
@@ -289,11 +290,11 @@ class IContact extends EmailMarketing
         foreach ($fields as $key => $field) {
             // Exclude any names
             if (in_array($field['publicName'], $excludeNames)) {
-                 continue;
+                continue;
             }
 
             $customFields[] = new IntegrationField([
-                'handle' => $field['customFieldId'] ,
+                'handle' => $field['customFieldId'],
                 'name' => $field['publicName'],
                 'type' => $this->_convertFieldType($field['fieldType']),
             ]);

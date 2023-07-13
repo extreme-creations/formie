@@ -136,11 +136,25 @@ class Repeater extends FormField implements NestedFieldInterface, EagerLoadingFi
      */
     public function getInputHtml($value, ElementInterface $element = null): string
     {
-        return Craft::$app->getView()->renderTemplate('formie/_formfields/repeater/input', [
+        $view = Craft::$app->getView();
+
+        $view->startJsBuffer();
+
+        // Render it once to get the JS used for inner fields (element fields)
+        $bodyHtml = $view->renderTemplate('formie/_formfields/repeater/input', [
             'name' => $this->handle,
             'value' => $value,
             'field' => $this,
-        ]);
+        ]);;
+
+        $footHtml = $view->clearJsBuffer();
+
+        return $view->renderTemplate('formie/_formfields/repeater/input', [
+            'name' => $this->handle,
+            'value' => $value,
+            'field' => $this,
+            'footHtml' => $footHtml,
+        ]);;
     }
 
     /**
@@ -149,7 +163,7 @@ class Repeater extends FormField implements NestedFieldInterface, EagerLoadingFi
     public function getPreviewInputHtml(): string
     {
         return Craft::$app->getView()->renderTemplate('formie/_formfields/repeater/preview', [
-            'field' => $this
+            'field' => $this,
         ]);
     }
 
@@ -205,7 +219,7 @@ class Repeater extends FormField implements NestedFieldInterface, EagerLoadingFi
     public function getFrontEndJsModules()
     {
         $modules = [];
-        
+
         $modules[] = [
             'src' => Craft::$app->getAssetManager()->getPublishedUrl('@verbb/formie/web/assets/frontend/dist/js/fields/repeater.js', true),
             'module' => 'FormieRepeater',
@@ -304,7 +318,7 @@ class Repeater extends FormField implements NestedFieldInterface, EagerLoadingFi
             SchemaHelper::conditionsField(),
         ];
     }
-    
+
     /**
      * @inheritDoc
      */
@@ -344,11 +358,11 @@ class Repeater extends FormField implements NestedFieldInterface, EagerLoadingFi
                 'rows' => [
                     'name' => 'rows',
                     'type' => Type::listOf($rowType),
-                    'resolve' => function ($rootValue) {
+                    'resolve' => function($rootValue) {
                         return $rootValue;
-                    }
-                ]
-            ]
+                    },
+                ],
+            ],
         ]));
     }
 }

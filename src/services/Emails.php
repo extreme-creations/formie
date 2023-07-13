@@ -161,7 +161,7 @@ class Emails extends Component
                     'value' => $notification->cc,
                     'message' => $e->getMessage(),
                     'file' => $e->getFile(),
-                    'line' => $e->getLine()
+                    'line' => $e->getLine(),
                 ]);
 
                 return ['error' => $error, 'email' => $newEmail, 'exception' => $e];
@@ -182,7 +182,7 @@ class Emails extends Component
                     'value' => $notification->replyTo,
                     'message' => $e->getMessage(),
                     'file' => $e->getFile(),
-                    'line' => $e->getLine()
+                    'line' => $e->getLine(),
                 ]);
 
                 return ['error' => $error, 'email' => $newEmail, 'exception' => $e];
@@ -198,7 +198,7 @@ class Emails extends Component
                 'value' => $notification->subject,
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
 
             return ['error' => $error, 'email' => $newEmail, 'exception' => $e];
@@ -274,7 +274,7 @@ class Emails extends Component
                 'value' => $templatePath,
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
 
             return ['error' => $error, 'email' => $newEmail, 'exception' => $e];
@@ -302,7 +302,7 @@ class Emails extends Component
         $emailRender = $this->renderEmail($notification, $submission);
 
         $newEmail = $emailRender['email'] ?? '';
-        
+
         // Check if there were any errors. It's split this was so calling `render()` can return errors for previews
         // But in our case, we want to log the errors and bail.
         if (isset($emailRender['error']) && $emailRender['error']) {
@@ -498,7 +498,7 @@ class Emails extends Component
      */
     private function _getFilteredString($string)
     {
-        $string = trim(Craft::parseEnv(trim($string)));
+        $string = trim(App::parseEnv(trim($string)));
 
         // Strip out any emoji's
         $string = trim(StringHelper::replaceMb4($string, ''));
@@ -522,7 +522,7 @@ class Emails extends Component
             // Also check for control characters, which aren't included above
             $email = preg_replace('/[^\PC\s]/u', '', $email);
 
-            $emailsEnv[] = trim(Craft::parseEnv(trim($email)));
+            $emailsEnv[] = trim(App::parseEnv(trim($email)));
         }
 
         $emailsEnv = array_filter($emailsEnv);
@@ -536,7 +536,7 @@ class Emails extends Component
     private function _getAssetsForSubmission($element)
     {
         $assets = [];
-        
+
         foreach ($element->getFieldLayout()->getFields() as $field) {
             if (get_class($field) === FileUpload::class) {
                 $value = $element->getFieldValue($field->handle);
@@ -580,6 +580,13 @@ class Emails extends Component
             // Check for asset size, 0kb files are technically invalid (or at least spammy)
             if (!$asset->size) {
                 Formie::log('Not attaching “' . $asset->filename . '” due to invalid file size: ' . $asset->size . '.');
+
+                continue;
+            }
+
+            // Check if the asset it over 15mb (a reasonable threshold)
+            if (($asset->size / 1000000) > 15) {
+                Formie::log('Not attaching “' . $asset->filename . '” due to large file size: ' . $asset->size . '.');
 
                 continue;
             }

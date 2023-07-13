@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\DateTimeHelper;
 use craft\helpers\Json;
@@ -74,32 +75,7 @@ class Monday extends Miscellaneous
         $settings = [];
 
         try {
-            $response = $this->request('POST', '/', [
-                'form_params' => [
-                    'query' => '
-                        query {
-                            boards {
-                                name
-                                id
-
-                                groups {
-                                    id
-                                    title
-                                }
-
-                                columns {
-                                    id
-                                    title
-                                    type
-                                    settings_str
-                                }
-                            }
-                        }
-                    ',
-                ],
-            ]);
-
-            $boards = $response['data']['boards'] ?? [];
+            $boards = $this->_getPaginated();
             $boardOptions = [];
 
             foreach ($boards as $key => $board) {
@@ -234,7 +210,7 @@ class Monday extends Miscellaneous
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://api.monday.com/v2/',
             'headers' => [
-                'Authorization' => Craft::parseEnv($this->apiKey),
+                'Authorization' => App::parseEnv($this->apiKey),
                 'Content-Type' => 'application/json',
             ],
         ]);
@@ -309,25 +285,25 @@ class Monday extends Miscellaneous
                     'email' => $value,
                     'text' => $value,
                 ];
-            } elseif ($type === 'link') {
+            } else if ($type === 'link') {
                 $newColumns[$handle] = [
                     'url' => $value,
                     'text' => $value,
                 ];
-            } elseif ($type === 'phone') {
+            } else if ($type === 'phone') {
                 $newColumns[$handle] = [
                     'phone' => $value,
                     'countryShortName' => '',
                 ];
-            } elseif ($type === 'color') {
+            } else if ($type === 'color') {
                 $newColumns[$handle] = [
                     'index' => (int)$value,
                 ];
-            } elseif ($type === 'lookup') {
+            } else if ($type === 'lookup') {
                 // No supported in API
-            } elseif ($type === 'board-relation') {
+            } else if ($type === 'board-relation') {
                 // No supported in API
-            } elseif ($type === 'date') {
+            } else if ($type === 'date') {
                 $date = DateTimeHelper::toDateTime($value);
 
                 if ($date) {
@@ -358,5 +334,46 @@ class Monday extends Miscellaneous
         }
 
         return [];
+    }
+
+    private function _getPaginated($limit = 100, $page = 1, $items = [])
+    {
+        $response = $this->request('POST', '/', [
+            'form_params' => [
+                'query' => '
+                    query {
+                        boards (limit:' . $limit . ', page:' . $page . ') {
+                            name
+                            id
+
+                            groups {
+                                id
+                                title
+                            }
+
+                            columns {
+                                id
+                                title
+                                type
+                                settings_str
+                            }
+                        }
+                    }
+                ',
+            ],
+        ]);
+
+        $newItems = $response['data']['boards'] ?? [];
+        $nextPage = $page + 1;
+
+        if ($newItems) {
+            $items = array_merge($items, $newItems);
+
+            if (count($newItems) === $limit) {
+                $items = $this->_getPaginated($limit, $nextPage, $items);
+            }
+        }
+
+        return $items;
     }
 }

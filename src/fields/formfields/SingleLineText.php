@@ -11,6 +11,7 @@ use Craft;
 use craft\base\ElementInterface;
 use craft\base\PreviewableFieldInterface;
 use craft\helpers\Json;
+use craft\helpers\StringHelper;
 use craft\helpers\Template;
 
 use yii\db\Schema;
@@ -41,6 +42,34 @@ class SingleLineText extends FormField implements PreviewableFieldInterface
 
     // Public Methods
     // =========================================================================
+
+    /**
+     * @inheritdoc
+     */
+    public function normalizeValue($value, ElementInterface $element = null)
+    {
+        if ($value !== null) {
+            $value = LitEmoji::entitiesToUnicode($value);
+        }
+
+        $value = $value !== '' ? $value : null;
+
+        return parent::normalizeValue($value, $element);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function serializeValue($value, ElementInterface $element = null)
+    {
+        if ($value !== null) {
+            // Save as HTML entities (e.g. `&#x1F525;`) so we can use that in JS to determine length.
+            // Saving as a shortcode is too tricky to detemine the same length in JS.
+            $value = LitEmoji::encodeHtml($value);
+        }
+
+        return parent::serializeValue($value, $element);
+    }
 
     /**
      * @inheritDoc
@@ -81,7 +110,10 @@ class SingleLineText extends FormField implements PreviewableFieldInterface
         }
 
         $value = $element->getFieldValue($this->handle);
-        $count = strlen($value);
+
+        // Convert multibyte text to HTML entities, so we can properly check string length
+        // exactly as it'll be saved in the database.
+        $count = strlen(LitEmoji::encodeHtml($value));
 
         if ($count > $limitAmount) {
             $element->addError(
@@ -145,7 +177,7 @@ class SingleLineText extends FormField implements PreviewableFieldInterface
     public function getPreviewInputHtml(): string
     {
         return Craft::$app->getView()->renderTemplate('formie/_formfields/single-line-text/preview', [
-            'field' => $this
+            'field' => $this,
         ]);
     }
 
@@ -235,14 +267,14 @@ class SingleLineText extends FormField implements PreviewableFieldInterface
                                 SchemaHelper::selectField([
                                     'name' => 'limitType',
                                     'options' => [
-                                        [ 'label' => Craft::t('formie', 'Characters'), 'value' => 'characters' ],
-                                        [ 'label' => Craft::t('formie', 'Words'), 'value' => 'words' ],
+                                        ['label' => Craft::t('formie', 'Characters'), 'value' => 'characters'],
+                                        ['label' => Craft::t('formie', 'Words'), 'value' => 'words'],
                                     ],
                                 ]),
                             ],
                         ],
                     ],
-                ]
+                ],
             ]),
             SchemaHelper::matchField([
                 'fieldTypes' => [self::class],

@@ -14,6 +14,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\Json;
 use craft\web\View;
 
@@ -24,7 +25,7 @@ class HubSpot extends Crm
     // Properties
     // =========================================================================
 
-    public $apiKey;
+    public $accessToken;
     public $mapToContact = false;
     public $mapToDeal = false;
     public $mapToCompany = false;
@@ -40,7 +41,17 @@ class HubSpot extends Crm
 
     // Public Methods
     // =========================================================================
-    
+
+    public function __construct($config = [])
+    {
+        // Config normalization - before the migration runs
+        if (array_key_exists('apiKey', $config)) {
+            unset($config['apiKey']);
+        }
+
+        parent::__construct($config);
+    }
+
     /**
      * @inheritDoc
      */
@@ -89,7 +100,7 @@ class HubSpot extends Crm
     {
         $rules = parent::defineRules();
 
-        $rules[] = [['apiKey'], 'required'];
+        $rules[] = [['accessToken'], 'required'];
 
         $contact = $this->getFormSettingValue('contact');
         $deal = $this->getFormSettingValue('deal');
@@ -346,7 +357,7 @@ class HubSpot extends Crm
                 $formPayload['context']['ipAddress'] = $this->ipAddress;
                 $formPayload['context']['pageUri'] = $this->referrer;
 
-                list($portalId, $formGuid) = explode('__', $this->formId);
+                [$portalId, $formGuid] = explode('__', $this->formId);
 
                 // Bloody HubSpot have old APIs, so they require a separate endpoint
                 $endpoint = "submissions/v3/integration/submit/${portalId}/${formGuid}";
@@ -403,9 +414,14 @@ class HubSpot extends Crm
             return $this->_client;
         }
 
+        $accessToken = App::parseEnv($this->accessToken);
+
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://api.hubapi.com/',
-            'query' => ['hapikey' => Craft::parseEnv($this->apiKey)],
+            'headers' => [
+                'Authorization' => 'Bearer ' . $accessToken,
+                'Content-Type' => 'application/json',
+            ],
         ]);
     }
 
@@ -470,12 +486,12 @@ class HubSpot extends Crm
 
             // Only allow supported types
             if (!in_array($field['type'], $supportedFields)) {
-                 continue;
+                continue;
             }
 
             // Exclude any names
             if (in_array($field['name'], $excludeNames)) {
-                 continue;
+                continue;
             }
 
             // Add in any options for some fields
@@ -513,7 +529,7 @@ class HubSpot extends Crm
     private function _getFormFields($form)
     {
         $fields = [];
-        
+
         $extraFields = [
             new IntegrationField([
                 'handle' => 'trackingID',

@@ -397,6 +397,10 @@ class Stencils extends Component
                 unset($notificationData['errors']);
             }
 
+            // Ensure we deal with any potentially out-of-date stencil data, as we add new settings
+            // Could also probably add this to a migration to be extra safe.
+            $notificationData['recipients'] = $notificationData['recipients'] ?? 'email';
+
             $notifications[] = new Notification($notificationData);
         }
 
@@ -424,7 +428,7 @@ class Stencils extends Component
                 'templateId',
                 'defaultStatusId',
                 'dateDeleted',
-                'uid'
+                'uid',
             ])
             ->orderBy('name ASC')
             ->from(['{{%formie_stencils}}']);
@@ -435,7 +439,7 @@ class Stencils extends Component
 
         $projectConfig = Craft::$app->getProjectConfig();
         $schemaVersion = $projectConfig->get('plugins.formie.schemaVersion', true);
-        
+
         if (version_compare($schemaVersion, '1.2.8', '>=')) {
             $query->addSelect(['submitActionEntryId']);
         }

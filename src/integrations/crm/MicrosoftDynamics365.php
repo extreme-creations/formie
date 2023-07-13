@@ -1,24 +1,19 @@
 <?php
 namespace verbb\formie\integrations\crm;
 
-use verbb\formie\Formie;
-use verbb\formie\base\Crm;
-use verbb\formie\base\Integration;
-use verbb\formie\elements\Form;
-use verbb\formie\elements\Submission;
-use verbb\formie\errors\IntegrationException;
-use verbb\formie\events\SendIntegrationPayloadEvent;
-use verbb\formie\models\IntegrationCollection;
-use verbb\formie\models\IntegrationField;
-use verbb\formie\models\IntegrationFormSettings;
-
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
-use craft\helpers\StringHelper;
-use craft\web\View;
-
 use TheNetworg\OAuth2\Client\Provider\Azure;
+use verbb\formie\base\Crm;
+use verbb\formie\base\Integration;
+use verbb\formie\elements\Submission;
+use verbb\formie\events\MicrosoftDynamics365RequiredLevelsEvent;
+use verbb\formie\events\MicrosoftDynamics365TargetSchemasEvent;
+use verbb\formie\Formie;
+use verbb\formie\models\IntegrationField;
+use verbb\formie\models\IntegrationFormSettings;
 
 class MicrosoftDynamics365 extends Crm
 {
@@ -28,6 +23,7 @@ class MicrosoftDynamics365 extends Crm
     public $clientId;
     public $clientSecret;
     public $apiDomain;
+    public $apiVersion = 'v9.0';
     public $mapToContact = false;
     public $mapToLead = false;
     public $mapToOpportunity = false;
@@ -39,6 +35,11 @@ class MicrosoftDynamics365 extends Crm
 
     private $_entityOptions = [];
 
+    // Constants
+    // =========================================================================
+
+    public const EVENT_MODIFY_REQUIRED_LEVELS = 'modifyRequiredLevels';
+    public const EVENT_MODIFY_TARGET_SCHEMAS = 'modifyTargetSchemas';
 
     // OAuth Methods
     // =========================================================================
@@ -56,7 +57,7 @@ class MicrosoftDynamics365 extends Crm
      */
     public function getClientId(): string
     {
-        return Craft::parseEnv($this->clientId);
+        return App::parseEnv($this->clientId);
     }
 
     /**
@@ -64,7 +65,7 @@ class MicrosoftDynamics365 extends Crm
      */
     public function getClientSecret(): string
     {
-        return Craft::parseEnv($this->clientSecret);
+        return App::parseEnv($this->clientSecret);
     }
 
     /**
@@ -96,7 +97,7 @@ class MicrosoftDynamics365 extends Crm
     {
         return array_merge(parent::getOauthProviderConfig(), [
             'defaultEndPointVersion' => '1.0',
-            'resource' => Craft::parseEnv($this->apiDomain),
+            'resource' => App::parseEnv($this->apiDomain),
         ]);
     }
 
@@ -221,7 +222,7 @@ class MicrosoftDynamics365 extends Crm
                 $accountPayload = $accountValues;
 
                 if ($contactId) {
-                    $accountPayload['primarycontactid@odata.bind'] = 'contacts(' . $contactId . ')';
+                    $accountPayload['primarycontactid@odata.bind'] = $this->_formatLookupValue('contacts', $contactId);
                 }
 
                 $response = $this->deliverPayload($submission, 'accounts?$select=accountid', $accountPayload);
@@ -246,7 +247,8 @@ class MicrosoftDynamics365 extends Crm
                 $leadPayload = $leadValues;
 
                 if ($contactId) {
-                    $leadPayload['parentcontactid@odata.bind'] = 'contacts(' . $contactId . ')';
+                    $leadPayload['parentcontactid@odata.bind'] = $this->_formatLookupValue('contacts', $contactId);
+                    $leadPayload['customerid_contact@odata.bind'] = $this->_formatLookupValue('contacts', $contactId);
                 }
 
                 $response = $this->deliverPayload($submission, 'leads?$select=leadid', $leadPayload);
@@ -271,11 +273,11 @@ class MicrosoftDynamics365 extends Crm
                 $opportunityPayload = $opportunityValues;
 
                 if ($contactId) {
-                    $accountPayload['parentcontactid@odata.bind'] = 'contacts(' . $contactId . ')';
+                    $accountPayload['parentcontactid@odata.bind'] = $this->_formatLookupValue('contacts', $contactId);
                 }
 
                 if ($accountId) {
-                    $accountPayload['parentaccountid@odata.bind'] = 'accounts(' . $accountId . ')';
+                    $accountPayload['parentaccountid@odata.bind'] = $this->_formatLookupValue('accounts', $accountId);
                 }
 
                 $response = $this->deliverPayload($submission, 'opportunities?$select=opportunityid', $opportunityPayload);
@@ -309,11 +311,29 @@ class MicrosoftDynamics365 extends Crm
      */
     public function request(string $method, string $uri, array $options = [])
     {
-        // Dynamics doesn't return a response for POST requests by default. Riiiiight...
-        if ($method === 'POST') {
-            $options['headers'] = [
-                'Prefer' => 'return=representation',
-            ];
+        // Recommended headers to pass for all web API requests
+        // https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors#http-headers
+        $defaultOptions = [
+            'headers' => [
+                'Accept' => 'application/json',
+                'OData-MaxVersion' => '4.0',
+                'OData-Version' => '4.0',
+                'If-None-Match' => null
+            ]
+        ];
+
+        $options = ArrayHelper::merge($defaultOptions, $options);
+
+        // Ensure a proper response is returned on POST/PATCH operations
+        // https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/compose-http-requests-handle-errors#prefer-headers
+        if ($method === 'POST' || $method === 'PATCH') {
+            $options['headers']['Prefer'] = 'return=representation';
+        }
+
+        // Prevent create when using upsert
+        // https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/perform-conditional-operations-using-web-api#prevent-create-in-upsert
+        if ($method === 'PATCH') {
+            $options['headers']['If-Match'] = '*';
         }
 
         return parent::request($method, $uri, $options);
@@ -329,10 +349,11 @@ class MicrosoftDynamics365 extends Crm
         }
 
         $token = $this->getToken();
-        $url = rtrim(Craft::parseEnv($this->apiDomain), '/');
+        $url = rtrim(App::parseEnv($this->apiDomain), '/');
+        $apiVersion = $this->apiVersion;
 
         $this->_client = Craft::createGuzzleClient([
-            'base_uri' => "$url/api/data/v9.0/",
+            'base_uri' => "$url/api/data/$apiVersion/",
             'headers' => [
                 'Authorization' => 'Bearer ' . ($token->accessToken ?? 'empty'),
                 'Content-Type' => 'application/json',
@@ -342,7 +363,7 @@ class MicrosoftDynamics365 extends Crm
         // Always provide an authenticated client - so check first.
         // We can't always rely on the EOL of the token.
         try {
-            $response = $this->request('GET', 'contacts');
+            $this->request('GET', 'WhoAmI');
         } catch (\Throwable $e) {
             if ($e->getCode() === 401) {
                 // Force-refresh the token
@@ -350,7 +371,7 @@ class MicrosoftDynamics365 extends Crm
 
                 // Then try again, with the new access token
                 $this->_client = Craft::createGuzzleClient([
-                    'base_uri' => "$url/api/data/v9.0/",
+                    'base_uri' => "$url/api/data/$apiVersion/",
                     'headers' => [
                         'Authorization' => 'Bearer ' . ($token->accessToken ?? 'empty'),
                         'Content-Type' => 'application/json',
@@ -363,13 +384,13 @@ class MicrosoftDynamics365 extends Crm
     }
 
 
-    // Private Methods
+    // Protected Methods
     // =========================================================================
 
     /**
      * @inheritDoc
      */
-    private function _convertFieldType($fieldType)
+    protected function convertFieldType($fieldType)
     {
         $fieldTypes = [
             'Decimal' => IntegrationField::TYPE_FLOAT,
@@ -378,67 +399,155 @@ class MicrosoftDynamics365 extends Crm
             'Integer' => IntegrationField::TYPE_NUMBER,
             'Boolean' => IntegrationField::TYPE_BOOLEAN,
             'Money' => IntegrationField::TYPE_FLOAT,
+            'Date' => IntegrationField::TYPE_DATE,
             'DateTime' => IntegrationField::TYPE_DATETIME,
         ];
 
         return $fieldTypes[$fieldType] ?? IntegrationField::TYPE_STRING;
     }
 
+    // Private Methods
+    // =========================================================================
+
     /**
      * @inheritDoc
      */
     private function _getEntityFields($entity)
     {
+        $metadataAttributesForSelect = [
+            'AttributeType',
+            'IsCustomAttribute',
+            'IsValidForCreate',
+            'IsValidForUpdate',
+            'CanBeSecuredForCreate',
+            'CanBeSecuredForUpdate',
+            'LogicalName',
+            'DisplayName',
+            'RequiredLevel'
+        ];
+
         // Fetch all defined fields on the entity
         // https://docs.microsoft.com/en-us/dynamics365/customer-engagement/web-api/contact?view=dynamics-ce-odata-9
         // https://docs.microsoft.com/en-us/dynamics365/customerengagement/on-premises/developer/entities/contact?view=op-9-1#BKMK_Address1_Telephone1
-        $response = $this->request('GET', "EntityDefinitions(LogicalName='$entity')?\$select=Attributes&\$expand=Attributes(\$select=AttributeType,IsCustomAttribute,IsValidForCreate,IsValidForUpdate,CanBeSecuredForCreate,CanBeSecuredForUpdate,LogicalName,SchemaName,DisplayName,RequiredLevel)");
+        $metadata = $this->request('GET', $this->_getEntityDefinitionsUri($entity), [
+            'query' => [
+                '$select' => 'Attributes',
+                '$expand' => 'Attributes($select='. implode(',', $metadataAttributesForSelect) . ')'
+            ]
+        ]);
+
+        // We also need to query DateTime attribute data to check if any are DateOnly
+        $dateTimeAttributes = $this->request('GET', $this->_getEntityDefinitionsUri($entity, 'DateTime'), [
+            'query' => [
+                '$select' => 'SchemaName,LogicalName,DateTimeBehavior'
+            ]
+        ]);
+
+        $dateTimeBehaviourValues = ArrayHelper::map($dateTimeAttributes, 'MetadataId','DateTimeBehavior.Value');
 
         $fields = [];
-        $attributes = $response['Attributes'] ?? [];
+        $attributes = $metadata['Attributes'] ?? [];
+
+        // Default to SystemRequired and ApplicationRequired
+        $requiredLevels = [
+            'SystemRequired',
+            'ApplicationRequired'
+        ];
+
+        $event = new MicrosoftDynamics365RequiredLevelsEvent([
+            'requiredLevels' => $requiredLevels,
+        ]);
+
+        $this->trigger(self::EVENT_MODIFY_REQUIRED_LEVELS, $event);
 
         foreach ($attributes as $field) {
             $label = $field['DisplayName']['UserLocalizedLabel']['Label'] ?? '';
-            $handle = $field['LogicalName'] ?? '';
+            $customField = $field['IsCustomAttribute'] ?? false;
             $canCreate = $field['IsValidForCreate'] ?? false;
             $requiredLevel = $field['RequiredLevel']['Value'] ?? 'None';
             $type = $field['AttributeType'] ?? '';
             $odataType = $field['@odata.type'] ?? '';
+            $metadataId = $field['MetadataId'] ?? '';
+
+            // Pick the correct field handle, depending on custom fields
+            if ($customField) {
+                $handle = $field['SchemaName'] ?? '';
+            } else {
+                $handle = $field['LogicalName'] ?? '';
+            }
+
             $key = $handle;
 
             $excludedTypes = [
-                'Virtual',
-                'Uniqueidentifier',
                 'Customer',
                 'EntityName',
+                'State',
+                'Uniqueidentifier',
+                'Virtual',
             ];
 
-            if (!$label || !$handle || !$canCreate || in_array($type, $excludedTypes)) {
+            if (!$label || !$handle || !$canCreate || in_array($type, $excludedTypes, true)) {
                 continue;
             }
 
             // Relational fields need a special handle
             if ($odataType === '#Microsoft.Dynamics.CRM.LookupAttributeMetadata') {
-                $handle = $handle . '@odata.bind';
+                $handle .= '@odata.bind';
+            }
+
+            // DateTime attributes, just because the AttributeType is DateTime doesn't mean it actually accepts one!
+            // If a field DateTimeBehaviour is set to DateOnly, it will not accept DateTime values ever!
+            // https://learn.microsoft.com/en-us/dynamics365/customerengagement/on-premises/developer/behavior-format-date-time-attribute
+            if ($type === 'DateTime') {
+                $dateTimeBehavior = $dateTimeBehaviourValues[$metadataId] ?? null;
+
+                if ($dateTimeBehavior === 'DateOnly') {
+                    $type = 'Date';
+                }
             }
 
             // Index by handle for easy lookup with PickLists
             $fields[$key] = new IntegrationField([
                 'handle' => $handle,
                 'name' => $label,
-                'type' => $this->_convertFieldType($type),
-                'required' => $requiredLevel === 'None' ? false : true,
+                'type' => $this->convertFieldType($type),
+                'required' => in_array($requiredLevel, $event->requiredLevels, true),
             ]);
         }
 
+        // Add default true/false values for boolean fields
+        foreach ($fields as $field) {
+            if ($field->type === IntegrationField::TYPE_BOOLEAN) {
+                $field->options = [
+                    'label' => Craft::t('formie', 'Default options'),
+                    'options' => [
+                        ['label' => Craft::t('formie', 'True'), 'value' => 'true'],
+                        ['label' => Craft::t('formie', 'False'), 'value' => 'false']
+                    ]
+                ];
+            }
+        }
+
         // Do another call for PickList fields, to populate any set options to pick from
-        $response = $this->request('GET', "EntityDefinitions(LogicalName='$entity')/Attributes/Microsoft.Dynamics.CRM.PicklistAttributeMetadata?\$select=LogicalName&\$expand=GlobalOptionSet(\$select=Options)");
+        $response = $this->request('GET', $this->_getEntityDefinitionsUri($entity, 'Picklist'), [
+            'query' => [
+                '$select' => 'IsCustomAttribute,LogicalName,SchemaName',
+                '$expand' => 'GlobalOptionSet($select=Options)'
+            ]
+        ]);
         $pickListFields = $response['value'] ?? [];
 
         foreach ($pickListFields as $pickListField) {
-            $handle = $pickListField['LogicalName'] ?? '';
+            $customField = $pickListField['IsCustomAttribute'] ?? false;
             $pickList = $pickListField['GlobalOptionSet']['Options'] ?? [];
             $options = [];
+
+            // Pick the correct field handle, depending on custom fields
+            if ($customField) {
+                $handle = $pickListField['SchemaName'] ?? '';
+            } else {
+                $handle = $pickListField['LogicalName'] ?? '';
+            }
 
             // Get the field to add options to
             $field = $fields[$handle] ?? null;
@@ -463,16 +572,14 @@ class MicrosoftDynamics365 extends Crm
         }
 
         // Do the same thing for any fields with an Owner, we have to do multiple queries.
-        // This be be for multiple entities, so have some cache.
+        // This is for multiple entities, so have some cache.
         $this->_getEntityOwnerOptions($entity, $fields);
 
         // Reset array keys
         $fields = array_values($fields);
 
-        // Sort alphabetically by label
-        usort($fields, function($a, $b) {
-            return strcmp($a->name, $b->name);
-        });
+        // Sort by required field and then name
+        ArrayHelper::multisort($fields, ['required', 'name'], [SORT_DESC, SORT_ASC]);
 
         return $fields;
     }
@@ -483,7 +590,11 @@ class MicrosoftDynamics365 extends Crm
     private function _getEntityOwnerOptions($entity, &$fields)
     {
         // Get all the fields that are relational
-        $response = $this->request('GET', "EntityDefinitions(LogicalName='$entity')/Attributes/Microsoft.Dynamics.CRM.LookupAttributeMetadata?\$select=LogicalName,Targets");
+        $response = $this->request('GET', $this->_getEntityDefinitionsUri($entity, 'Lookup'), [
+            'query' => [
+                '$select' => 'IsCustomAttribute,LogicalName,SchemaName,Targets'
+            ]
+        ]);
         $relationFields = $response['value'] ?? [];
 
         // Define a schema so that we can query each entity according to the target (index)
@@ -526,7 +637,7 @@ class MicrosoftDynamics365 extends Crm
             ],
             'campaign' => [
                 'entity' => 'campaigns',
-                'label' => 'fullname',
+                'label' => 'name',
                 'value' => 'campaignid',
             ],
             'pricelevel' => [
@@ -535,6 +646,14 @@ class MicrosoftDynamics365 extends Crm
                 'value' => 'pricelevelid',
             ],
         ];
+
+        $event = new MicrosoftDynamics365TargetSchemasEvent([
+            'targetSchemas' => $targetSchemas,
+        ]);
+
+        $this->trigger(self::EVENT_MODIFY_TARGET_SCHEMAS, $event);
+
+        $targetSchemas = ArrayHelper::merge($targetSchemas, $event->targetSchemas);
 
         // Populate our cached entity options, cached across multiple calls because we only need to
         // fetch the collection once, for each entity type. Subsequent fields can re-use the options.
@@ -554,16 +673,29 @@ class MicrosoftDynamics365 extends Crm
                     continue;
                 }
 
-                // Fetch the entities and use the schema options to store
-                $response = $this->request('GET', $targetSchema['entity']);
+                // We don't really need that much from the entities
+                $select = [$targetSchema['label'], $targetSchema['value']];
+
+                if ($target === 'systemuser') {
+                    $select[] = 'applicationid';
+                }
+
+                // Fetch the entities and use the schema options to store. Be sure to limit and be performant.
+                $response = $this->request('GET', $targetSchema['entity'], [
+                    'query' => [
+                        '$top' => $targetSchema['limit'] ?? '100',
+                        '$select' => implode(',', $select),
+                        '$orderby' => $targetSchema['orderby'] ?? null,
+                        '$filter' => $targetSchema['filter'] ?? null
+                    ],
+                ]);
+
                 $entities = $response['value'] ?? [];
 
                 foreach ($entities as $entity) {
                     // Special-case for systemusers
-                    if ($target === 'systemuser') {
-                        if (isset($entity['applicationid'])) {
-                            continue;
-                        }
+                    if ($target === 'systemuser' && isset($entity['applicationid'])) {
+                        continue;
                     }
 
                     $label = $entity[$targetSchema['label']] ?? '';
@@ -571,7 +703,7 @@ class MicrosoftDynamics365 extends Crm
 
                     $this->_entityOptions[$target][] = [
                         'label' => $label,
-                        'value' => $targetSchema['entity'] . '(' . $value . ')',
+                        'value' => $this->_formatLookupValue($targetSchema['entity'], $value),
                     ];
                 }
             }
@@ -579,14 +711,21 @@ class MicrosoftDynamics365 extends Crm
 
         // With all possible options populated, add the options into the fields
         foreach ($relationFields as $relationField) {
-            $handle = $relationField['LogicalName'] ?? '';
+            $customField = $relationField['IsCustomAttribute'] ?? false;
             $targets = $relationField['Targets'] ?? [];
             $options = [];
+
+            // Pick the correct field handle, depending on custom fields
+            if ($customField) {
+                $handle = $relationField['SchemaName'] ?? '';
+            } else {
+                $handle = $relationField['LogicalName'] ?? '';
+            }
 
             foreach ($targets as $target) {
                 // Get the options for this field
                 if (isset($this->_entityOptions[$target])) {
-                    $options = array_merge($options, $this->_entityOptions[$target]);
+                    $options = ArrayHelper::merge($options, $this->_entityOptions[$target]);
                 }
             }
 
@@ -603,5 +742,35 @@ class MicrosoftDynamics365 extends Crm
                 'options' => $options,
             ];
         }
+    }
+
+    /**
+     * Formats lookup values as entityname(GUID)
+     *
+     * @param $entity
+     * @param $value
+     * @return string
+     */
+    private function _formatLookupValue($entity, $value): string
+    {
+        return $entity . '(' . $value . ')';
+    }
+
+    /**
+     * Format EntityDefintions uri request path
+     *
+     * @param $entity
+     * @param $type
+     * @return string
+     */
+    private function _getEntityDefinitionsUri($entity, $type = null): string
+    {
+        $path = "EntityDefinitions(LogicalName='$entity')";
+
+        if ($type) {
+            $path .= "/Attributes/Microsoft.Dynamics.CRM.{$type}AttributeMetadata";
+        }
+
+        return $path;
     }
 }

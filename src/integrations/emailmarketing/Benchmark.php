@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -87,7 +88,7 @@ class Benchmark extends EmailMarketing
                         'name' => $listAttributes['LastnameLabel'] ?? Craft::t('formie', 'Last Name'),
                     ]),
                 ];
-            
+
                 foreach ($listAttributes as $listKey => $listAttribute) {
                     if (strstr($listKey, 'Field') && strstr($listKey, 'Name')) {
                         $listFields[] = new IntegrationField([
@@ -146,7 +147,6 @@ class Benchmark extends EmailMarketing
                 $response = $this->request('PATCH', "Contact/{$this->listId}/ContactDetails/{$existingContact['ID']}", [
                     'json' => $payload,
                 ]);
-
             } else {
                 $response = $this->request('POST', "Contact/{$this->listId}/ContactDetails", [
                     'json' => $payload,
@@ -210,7 +210,7 @@ class Benchmark extends EmailMarketing
 
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://clientapi.benchmarkemail.com/',
-            'headers' => ['AuthToken' => Craft::parseEnv($this->apiKey)],
+            'headers' => ['AuthToken' => App::parseEnv($this->apiKey)],
         ]);
     }
 }

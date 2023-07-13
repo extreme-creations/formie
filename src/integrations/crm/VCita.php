@@ -12,6 +12,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\helpers\StringHelper;
@@ -151,10 +152,12 @@ class VCita extends Crm
             $clientPayload = $clientValues;
 
             // Can't handle update and create, so check first
-            $response = $this->request('GET', 'clients', ['query' => [
-                'search_by' => 'email',
-                'search_term' => $clientPayload['email'] ?? '',
-            ]]);
+            $response = $this->request('GET', 'clients', [
+                'query' => [
+                    'search_by' => 'email',
+                    'search_term' => $clientPayload['email'] ?? '',
+                ],
+            ]);
             $existingClient = $response['data']['clients'][0]['id'] ?? '';
 
             if ($existingClient) {
@@ -214,7 +217,7 @@ class VCita extends Crm
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://api.vcita.biz/platform/v1/',
             'headers' => [
-                'Authorization' => 'Bearer ' . Craft::parseEnv($this->apiKey),
+                'Authorization' => 'Bearer ' . App::parseEnv($this->apiKey),
                 'Content-Type' => 'application/json',
             ],
         ]);
@@ -262,7 +265,7 @@ class VCita extends Crm
         foreach ($fields as $key => $field) {
             // Only allow supported types
             if (in_array($field['type'], $unsupportedFields) || in_array($field['label'], $unsupportedFields)) {
-                 continue;
+                continue;
             }
 
             $customFields[] = new IntegrationField([

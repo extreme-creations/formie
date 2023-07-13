@@ -16,6 +16,7 @@ use verbb\formie\models\IntegrationField;
 use verbb\formie\models\IntegrationFormSettings;
 
 use Craft;
+use craft\helpers\App;
 use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use craft\web\View;
@@ -96,7 +97,7 @@ class SharpSpring extends Crm
                     $submission = new Submission();
                     $submission->setForm($form);
                     $fieldContent = Formie::$plugin->getSubmissions()->populateFakeSubmission($submission);
-                    
+
                     $response = $this->_sendFormSubmission($endpoint, $submission);
 
                     // HTML/JS is returned from the response, so handle that.
@@ -285,8 +286,8 @@ class SharpSpring extends Crm
         return $this->_client = Craft::createGuzzleClient([
             'base_uri' => 'https://api.sharpspring.com/pubapi/v1.2/',
             'query' => [
-                'accountID' => Craft::parseEnv($this->accountId),
-                'secretKey' => Craft::parseEnv($this->secretKey),
+                'accountID' => App::parseEnv($this->accountId),
+                'secretKey' => App::parseEnv($this->secretKey),
             ],
         ]);
     }
@@ -341,7 +342,7 @@ class SharpSpring extends Crm
      */
     private function _sendFormSubmission($endpoint, $submission)
     {
-        $formUrl = Craft::parseEnv($this->formUrl);
+        $formUrl = App::parseEnv($this->formUrl);
 
         $serializedValues = [];
 

@@ -3,7 +3,7 @@ CRM integrations are one of the provided integrations with Formie, and are used 
 
 Formie uses Craft‘s Queue system to send data to third-party providers. When a submission is successful a job is added to the queue so that it can be processed asynchronously.
 
-<img src="https://verbb.io/uploads/plugins/formie/crm.png" />
+<img src="https://verbb.imgix.net/plugins/formie/crm.png" />
 
 You can create CRM integrations by going to **Formie** → **Settings** → **CRM**. You can pick from a list of providers Formie supports, and provide details for connecting to their respective APIs. You can also create multiple CRM integrations, in case you need to connect to multiple, different providers.
 
@@ -11,7 +11,7 @@ You can also test the connection to the APIs, to ensure that your site and Formi
 
 Once created, enabled and connected, these integrations will be available to configure in your forms.
 
-<img src="https://verbb.io/uploads/plugins/formie/crm-form.png" />
+<img src="https://verbb.imgix.net/plugins/formie/crm-form.png" />
 
 ## Refresh Integration
 Formie will fetch a number of data objects for the provider - each being specific to the provider. These objects are cached for performance, you can also refresh the available data objects if they change.
@@ -460,6 +460,11 @@ Follow the below steps to connect to the Microsoft Dynamics 365 API.
 1. Enable the integration and fill out all required fields.
 1. Click **Save** to save the form.
 
+### Optional: Microsoft Dynamics 365 Web API version
+
+The Microsoft Dynamics 365 Web API provides [different versions of the Web API](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/web-api-versions). This is to both maintain compatibility or implement new breaking changes. There are no major differences between v9.0, v9.1 or v9.2 currently. This setting allows you to specify a specific API version if required. When setting a specific value, all Microsoft Dynamics 365 Web API requests will use this API version in the request URI.
+
+For compatibility, the default setting is v9.0. This has been the value used in the Microsoft Dynamics 365 CRM integration prior to this being customisable.
 
 ## Pardot
 Follow the below steps to connect to the Pardot API.

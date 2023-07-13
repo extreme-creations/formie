@@ -149,6 +149,11 @@ class Email extends FormField implements PreviewableFieldInterface
             ->leftJoin(['s' => '{{%formie_submissions}}'], "[[s.id]] = [[c.elementId]]")
             ->leftJoin('{{%elements}} e', '[[e.id]] = [[s.id]]');
 
+        // Exclude _this_ element, if there is one
+        if ($element->id) {
+            $query->andWhere(['!=', 's.id', $element->id]);
+        }
+
         // Fire a 'modifyEmailFieldUniqueQuery' event
         $event = new ModifyEmailFieldUniqueQueryEvent([
             'query' => $query,
@@ -184,7 +189,7 @@ class Email extends FormField implements PreviewableFieldInterface
     public function getPreviewInputHtml(): string
     {
         return Craft::$app->getView()->renderTemplate('formie/_formfields/email/preview', [
-            'field' => $this
+            'field' => $this,
         ]);
     }
 

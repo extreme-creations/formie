@@ -90,15 +90,17 @@ class Integrations extends Component
         ];
 
         if (Formie::$plugin->getService()->isPluginInstalledAndEnabled('snaptcha')) {
-            $captchas = array_merge($captchas, [
-                captchas\Snaptcha::class,
-            ]);
+            $captchas[] = captchas\Snaptcha::class;
         }
 
         $elements = [
             elements\Entry::class,
             elements\User::class,
         ];
+
+        if (Formie::$plugin->getService()->isPluginInstalledAndEnabled('calendar')) {
+            $elements[] = elements\CalendarEvent::class;
+        }
 
         $emailMarketing = [
             emailmarketing\ActiveCampaign::class,
@@ -115,6 +117,7 @@ class Integrations extends Component
             emailmarketing\IContact::class,
             emailmarketing\Klaviyo::class,
             emailmarketing\Mailchimp::class,
+            emailmarketing\Mailjet::class,
             emailmarketing\MailerLite::class,
             emailmarketing\Moosend::class,
             emailmarketing\Omnisend::class,
@@ -124,9 +127,7 @@ class Integrations extends Component
         ];
 
         if (Formie::$plugin->getService()->isPluginInstalledAndEnabled('campaign')) {
-            $emailMarketing = array_merge($emailMarketing, [
-                emailmarketing\Campaign::class,
-            ]);
+            $emailMarketing[] = emailmarketing\Campaign::class;
         }
 
         $crm = [
@@ -139,6 +140,7 @@ class Integrations extends Component
             crm\Freshdesk::class,
             crm\Freshsales::class,
             crm\HubSpot::class,
+            crm\HubSpotLegacy::class,
             crm\Infusionsoft::class,
             crm\Insightly::class,
             crm\Klaviyo::class,
@@ -332,7 +334,7 @@ class Integrations extends Component
         if ($this->hasEventHandlers(self::EVENT_BEFORE_SAVE_INTEGRATION)) {
             $this->trigger(self::EVENT_BEFORE_SAVE_INTEGRATION, new IntegrationEvent([
                 'integration' => $integration,
-                'isNew' => $isNewIntegration
+                'isNew' => $isNewIntegration,
             ]));
         }
 
@@ -430,7 +432,7 @@ class Integrations extends Component
         if ($this->hasEventHandlers(self::EVENT_AFTER_SAVE_INTEGRATION)) {
             $this->trigger(self::EVENT_AFTER_SAVE_INTEGRATION, new IntegrationEvent([
                 'integration' => $this->getIntegrationById($integrationRecord->id),
-                'isNew' => $isNewIntegration
+                'isNew' => $isNewIntegration,
             ]));
         }
     }
@@ -522,7 +524,7 @@ class Integrations extends Component
         // Fire a 'beforeDeleteIntegration' event
         if ($this->hasEventHandlers(self::EVENT_BEFORE_DELETE_INTEGRATION)) {
             $this->trigger(self::EVENT_BEFORE_DELETE_INTEGRATION, new IntegrationEvent([
-                'integration' => $integration
+                'integration' => $integration,
             ]));
         }
 
@@ -531,7 +533,7 @@ class Integrations extends Component
         }
 
         Craft::$app->getProjectConfig()->remove(self::CONFIG_INTEGRATIONS_KEY . '.' . $integration->uid, "Delete the “{$integration->handle}” integration");
-        
+
         return true;
     }
 
@@ -583,7 +585,7 @@ class Integrations extends Component
         // Fire an 'afterDeleteIntegration' event
         if ($this->hasEventHandlers(self::EVENT_AFTER_DELETE_INTEGRATION)) {
             $this->trigger(self::EVENT_AFTER_DELETE_INTEGRATION, new IntegrationEvent([
-                'integration' => $integration
+                'integration' => $integration,
             ]));
         }
     }
@@ -833,7 +835,7 @@ class Integrations extends Component
                 'tokenId',
                 'dateCreated',
                 'dateUpdated',
-                'uid'
+                'uid',
             ])
             ->from(['{{%formie_integrations}}'])
             ->where(['dateDeleted' => null])

@@ -18,8 +18,10 @@ use Craft;
 use craft\base\Component;
 use craft\db\Query;
 use craft\helpers\ArrayHelper;
+use craft\helpers\Console;
 use craft\helpers\Db;
 use craft\helpers\DateTimeHelper;
+use craft\helpers\ElementHelper;
 use craft\helpers\Html;
 use craft\helpers\Json;
 use craft\helpers\MigrationHelper;
@@ -126,7 +128,7 @@ class Forms extends Component
         try {
             // Prep the fields for save
             $fieldLayout = $form->getFormFieldLayout();
-            
+
             foreach ($fieldLayout->getFields() as $field) {
                 $field->context = $form->getFormFieldContext();
                 $fieldsService->prepFieldForSave($field);
@@ -258,7 +260,7 @@ class Forms extends Component
             $transaction->rollBack();
 
             $form->addErrors(['general' => $e->getMessage()]);
-            
+
             Formie::error('Unable to save form “' . $form->handle . '”: ' . $e->getMessage());
 
             return false;
@@ -348,12 +350,12 @@ class Forms extends Component
         $pagesData = $request->getBodyParam('pages');
 
         if (!$pagesData) {
-            $fieldLayout = new FieldLayout([ 'type' => Form::class ]);
+            $fieldLayout = new FieldLayout(['type' => Form::class]);
             $fieldLayout->setPages([
                 new FieldLayoutPage([
                     'name' => Craft::t('site', 'Page 1'),
                     'sortOrder' => '0',
-                ])
+                ]),
             ]);
 
             return $fieldLayout;
@@ -560,7 +562,7 @@ class Forms extends Component
             $pages[] = $page;
         }
 
-        $fieldLayout = new FieldLayout([ 'type' => $type ]);
+        $fieldLayout = new FieldLayout(['type' => $type]);
         $fieldLayout->setPages($pages);
         $fieldLayout->setFields($fields);
 
@@ -596,7 +598,6 @@ class Forms extends Component
         do {
             $i++;
             $name = '{{%' . $baseName . ($i !== 0 ? '_' . $i : '') . '}}';
-
         } while ($name !== $form->fieldContentTable && $db->tableExists($name));
 
         return $name;
@@ -636,7 +637,7 @@ class Forms extends Component
                 } else {
                     $page->addError($attribute, Craft::t('app', '{attribute} "{value}" has already been taken.', [
                         'attribute' => $page->getAttributeLabel($attribute),
-                        'value' => Html::encode($value)
+                        'value' => Html::encode($value),
                     ]));
 
                     $validates = false;
@@ -686,7 +687,7 @@ class Forms extends Component
                     // type).
                     $error = Craft::t('formie', '{attribute} "{value}" has already been taken.', [
                         'attribute' => Craft::t('formie', 'Handle'),
-                        'value' => $field->handle
+                        'value' => $field->handle,
                     ]);
 
                     $field->addError('handle', $error);
@@ -766,6 +767,48 @@ class Forms extends Component
                 $db->createCommand()
                     ->dropTableIfExists($tableName)
                     ->execute();
+            }
+        }
+    }
+
+    /**
+     * Prunes any field columns in content tables for forms. Run via GC.
+     *
+     * @throws \yii\db\Exception
+     */
+    public function pruneContentTableFields($consoleInstance = null)
+    {
+        $db = Craft::$app->getDb();
+
+        $forms = Form::find()->status(null)->all();
+
+        foreach ($forms as $form) {
+            if ($consoleInstance) {
+                $fieldColumns = [];
+
+                foreach ($form->getFields() as $field) {
+                    if ($field::hasContentColumn()) {
+                        $fieldColumns[] = ElementHelper::fieldColumnFromField($field);
+                    }
+                }
+
+                $fieldContentTable = $db->getTableSchema($form->fieldContentTable);
+
+                foreach ($fieldContentTable->getColumnNames() as $columnName) {
+                    if (!strstr($columnName, 'field_')) {
+                        continue;
+                    }
+
+                    if (!in_array($columnName, $fieldColumns)) {
+                        $consoleInstance->stdout($form->handle . ': Found unused field column: ' . $columnName . '.' . PHP_EOL, Console::FG_YELLOW);
+
+                        $db->createCommand()
+                            ->dropColumn($form->fieldContentTable, $columnName)
+                            ->execute();
+
+                        $consoleInstance->stdout($form->handle . ': Removed column ' . $columnName . ' from ' . $form->fieldContentTable . '.' . PHP_EOL, Console::FG_GREEN);
+                    }
+                }
             }
         }
     }
